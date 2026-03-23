@@ -10,7 +10,6 @@ from launch_ros.parameter_descriptions import ParameterValue
 def generate_launch_description():
     pkg_description = get_package_share_directory('quadruped_description')
     pkg_bringup = get_package_share_directory('quadruped_bringup')
-    pkg_control = get_package_share_directory('quadruped_control')
     pkg_gazebo_ros = get_package_share_directory('gazebo_ros')
 
     xacro_file = os.path.join(pkg_description, 'urdf', 'quadruped.urdf.xacro')
@@ -35,36 +34,41 @@ def generate_launch_description():
     spawn_entity = Node(
         package='gazebo_ros',
         executable='spawn_entity.py',
-        arguments=['-topic', 'robot_description', '-entity', 'quadruped', '-x', '0.0', '-y', '0.0', '-z', '0.43'],
+        arguments=['-topic', 'robot_description', '-entity', 'quadruped', '-z', '0.25'],
         output='screen'
     )
 
-    # Increased delays for spawner nodes
     load_jsb = Node(
         package='controller_manager',
         executable='spawner',
-        arguments=['joint_state_broadcaster', '--controller-manager', '/controller_manager'],
+        arguments=['joint_state_broadcaster'],
+        output='screen'
     )
 
     load_jtc = Node(
         package='controller_manager',
         executable='spawner',
-        arguments=['joint_trajectory_controller', '--controller-manager', '/controller_manager'],
+        arguments=['joint_trajectory_controller'],
+        output='screen'
     )
 
     gait_node = Node(
         package='quadruped_gait',
         executable='gait_node',
         name='gait_node',
+        parameters=[{'use_sim_time': True}]
     )
+
+    arguments=['joint_state_broadcaster', '--controller-manager', '/controller_manager', '--ros-args', '-p', 'use_sim_time:=True']
 
     cleanup = ExecuteProcess(cmd=['pkill', '-9', 'gzserver'], output='screen')
 
     return LaunchDescription([
         cleanup,
-        TimerAction(period=2.0, actions=[robot_state_publisher, gazebo]),
-        TimerAction(period=10.0, actions=[spawn_entity]),
-        TimerAction(period=20.0, actions=[load_jsb]),
-        TimerAction(period=25.0, actions=[load_jtc]),
-        TimerAction(period=30.0, actions=[gait_node])
+        # 충분한 간격을 두어 Humble 가제보 통신 안정성 확보
+        TimerAction(period=5.0, actions=[robot_state_publisher, gazebo]),
+        TimerAction(period=15.0, actions=[spawn_entity]),
+        TimerAction(period=25.0, actions=[load_jsb]),
+        TimerAction(period=30.0, actions=[load_jtc]),
+        TimerAction(period=35.0, actions=[gait_node])
     ])
