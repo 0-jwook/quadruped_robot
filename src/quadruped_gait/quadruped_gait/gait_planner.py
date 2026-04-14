@@ -38,8 +38,11 @@ class GaitPlanner:
         self.Q3_NEUTRAL =  1.6597  # rad
         self.last_angles = [[0.0, self.Q2_NEUTRAL, self.Q3_NEUTRAL] for _ in range(4)]
 
-    def get_stand_posture(self, roll=0.0, pitch=0.0):
-        """정지 상태 자세 (IMU 피드백 반영)"""
+    def get_stand_posture(self, roll=0.0, pitch=0.0, body_height=None):
+        """정지 상태 자세 (IMU 피드백 반영).
+        body_height: 외부에서 전달된 목표 높이(m). None이면 기본값 사용.
+        """
+        bh = body_height if body_height is not None else self.body_height
         joint_angles = []
         # 피드백 게인 (pitch 게인을 높여 뒤로 쏠림 즉시 복원)
         kp_roll = 0.8
@@ -50,12 +53,11 @@ class GaitPlanner:
             leg_y = 0.1 if (i == 0 or i == 2) else -0.1
 
             # IMU 기반 수평 유지 보정 (자세 제어)
-            # 몸체가 기울어진 반대 방향으로 다리를 조절
             z_balance = -(leg_x * math.sin(pitch) * kp_pitch - leg_y * math.sin(roll) * kp_roll)
 
             target_x = self.front_x_offset if i < 2 else self.rear_x_offset
             target_y = self.kin.L1 if (i == 0 or i == 2) else -self.kin.L1
-            target_z = -self.body_height + z_balance
+            target_z = -bh + z_balance
 
             res = self.kin.ik(target_x, target_y, target_z, leg_id=i)
             if res:
@@ -63,8 +65,11 @@ class GaitPlanner:
             joint_angles.extend(self.last_angles[i])
         return joint_angles
 
-    def get_walk_posture(self, vx, vy, omega, t, roll=0.0, pitch=0.0):
-        """회전(omega)과 횡이동(vy) 로직을 포함하며, IMU 피드백을 통해 동적 안정을 꾀함"""
+    def get_walk_posture(self, vx, vy, omega, t, roll=0.0, pitch=0.0, body_height=None):
+        """회전(omega)과 횡이동(vy) 로직을 포함하며, IMU 피드백을 통해 동적 안정을 꾀함.
+        body_height: 외부에서 전달된 목표 높이(m). None이면 기본값 사용.
+        """
+        bh = body_height if body_height is not None else self.body_height
         phi = (t % self.period) / self.period
         joint_angles = []
 
@@ -91,7 +96,7 @@ class GaitPlanner:
             stride_x = max(-self.max_stride, min(self.max_stride, stride_x))
             stride_y = max(-self.max_stride, min(self.max_stride, stride_y))
 
-            turn_radius = 0.15 
+            turn_radius = 0.15
             stride_yaw_x = -omega * turn_radius * side_sign * (self.period * (1.0 - self.duty_factor))
             stride_yaw_y = omega * turn_radius * (1.0 if i < 2 else -1.0) * (self.period * (1.0 - self.duty_factor))
 
@@ -102,14 +107,12 @@ class GaitPlanner:
                 s = leg_phi / self.duty_factor
                 step_x = anchor_x + (0.5 - s) * total_stride_x
                 step_y = base_y + (0.5 - s) * total_stride_y
-                # 지지기 동안에도 몸체 수평을 맞추기 위해 z_balance 적용
-                step_z = -self.body_height + z_balance
+                step_z = -bh + z_balance
             else:  # SWING (공중 이동기)
                 s = (leg_phi - self.duty_factor) / (1.0 - self.duty_factor)
                 step_x = anchor_x + (s - 0.5) * total_stride_x
                 step_y = base_y + (s - 0.5) * total_stride_y
-                # 스윙기에는 원래 궤적에 피드백을 더함
-                step_z = -self.body_height + self.step_height * math.sin(s * math.pi) + z_balance
+                step_z = -bh + self.step_height * math.sin(s * math.pi) + z_balance
 
             res = self.kin.ik(step_x, step_y, step_z, leg_id=i)
             if res:
