@@ -26,16 +26,23 @@ joint_trajectory_controller:
     state_interfaces:
       - position
       - velocity
+    
+    # --- [PID 게인 수정 가이드] ---
+    # 1. P 게인을 낮추어 과한 반응을 억제합니다.
+    # 2. D 게인을 높여 진동을 흡수(Damping)합니다.
+    # 3. I 게인은 0에 가깝게 설정하여 오차 누적으로 인한 발산을 막습니다.
     gains:
-      front_right_shoulder_joint: {p: 400.0, i: 0.1, d: 1.0, ff_velocity_scale: 1.0}
-      front_left_shoulder_joint:  {p: 400.0, i: 0.1, d: 1.0, ff_velocity_scale: 1.0}
-      rear_left_shoulder_joint:   {p: 400.0, i: 0.1, d: 1.0, ff_velocity_scale: 1.0}
-      rear_right_shoulder_joint:  {p: 400.0, i: 0.1, d: 1.0, ff_velocity_scale: 1.0}
-      front_left_leg_joint:  {p: 350.0, i: 0.1, d: 1.0, ff_velocity_scale: 1.0}
-      front_right_leg_joint: {p: 350.0, i: 0.1, d: 1.0, ff_velocity_scale: 1.0}
-      rear_left_leg_joint:   {p: 350.0, i: 0.1, d: 1.0, ff_velocity_scale: 1.0}
-      rear_right_leg_joint:  {p: 350.0, i: 0.1, d: 1.0, ff_velocity_scale: 1.0}
-      front_left_foot_joint:  {p: 75.0, i: 0.1, d: 1.0, ff_velocity_scale: 1.0}
-      front_right_foot_joint: {p: 75.0, i: 0.1, d: 1.0, ff_velocity_scale: 1.0}
-      rear_left_foot_joint:   {p: 75.0, i: 0.1, d: 1.0, ff_velocity_scale: 1.0}
-      rear_right_foot_joint:  {p: 75.0, i: 0.1, d: 1.0, ff_velocity_scale: 1.0}
+      front_left_shoulder_joint:  {p: 100.0, i: 0.01, d: 5.0}
+      front_right_shoulder_joint: {p: 100.0, i: 0.01, d: 5.0}
+      rear_left_shoulder_joint:   {p: 100.0, i: 0.01, d: 5.0}
+      rear_right_shoulder_joint:  {p: 100.0, i: 0.01, d: 5.0}
+
+      front_left_leg_joint:  {p: 150.0, i: 0.01, d: 8.0}
+      front_right_leg_joint: {p: 150.0, i: 0.01, d: 8.0}
+      rear_left_leg_joint:   {p: 150.0, i: 0.01, d: 8.0}
+      rear_right_leg_joint:  {p: 150.0, i: 0.01, d: 8.0}
+
+      front_left_foot_joint:  {p: 120.0, i: 0.01, d: 4.0}
+      front_right_foot_joint: {p: 120.0, i: 0.01, d: 4.0}
+      rear_left_foot_joint:   {p: 120.0, i: 0.01, d: 4.0}
+      rear_right_foot_joint:  {p: 120.0, i: 0.01, d: 4.0}
