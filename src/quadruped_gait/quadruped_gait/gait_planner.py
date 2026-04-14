@@ -21,9 +21,16 @@ class GaitPlanner:
         # 다리별 페이즈 오프셋 (LH -> LF -> RH -> RF 순차 이동)
         self.leg_phases = [0.25, 0.75, 0.0, 0.5] 
         
-        # 앞뒤 간격 유지 (다리 간 물리적 충돌 방지를 위한 최소한의 오프셋)
-        self.front_x_offset = 0.0
-        self.rear_x_offset = 0.0
+        # --- [무게중심 안정성 설정] ---
+        # front_x_offset: 앞발 기준점을 어깨 관절보다 전방으로 배치.
+        # Wave gait에서 앞발 1개가 Swing 중일 때 지지 삼각형(나머지 3발)의
+        # 무게중심이 삼각형 안에 들어오려면 기하학적으로 ≥0.16m 이 필요.
+        # (front_x_offset=0일 때 CoM이 지지 삼각형 경계선 위 → 윌리 발생)
+        self.front_x_offset = 0.17   # 앞발: 어깨보다 17cm 전방 (윌리 방지 핵심값)
+        self.rear_x_offset  = 0.0    # 뒷발: 어깨 바로 아래 (기본값 유지)
+
+        # 고속 이동 시 IK 범위 초과 방지 (front_x_offset=0.17 기준 최대 도달 한계)
+        self.max_stride = 0.22       # 보폭 상한 (m)
         
         # 중립 자세(기립) 기준값: body_height=0.27, L2=L3=0.2, L1=0.08 기준으로 계산된 값
         # 하드웨어 서보 각도 변환의 기준점으로도 사용됨
@@ -34,9 +41,9 @@ class GaitPlanner:
     def get_stand_posture(self, roll=0.0, pitch=0.0):
         """정지 상태 자세 (IMU 피드백 반영)"""
         joint_angles = []
-        # 피드백 게인
+        # 피드백 게인 (pitch 게인을 높여 뒤로 쏠림 즉시 복원)
         kp_roll = 0.8
-        kp_pitch = 0.8
+        kp_pitch = 1.5
 
         for i in range(4):
             leg_x = 0.2 if i < 2 else -0.2
@@ -61,9 +68,9 @@ class GaitPlanner:
         phi = (t % self.period) / self.period
         joint_angles = []
 
-        # 피드백 게인 (보행 시에는 약간 낮게 설정하여 진동 방지)
+        # 피드백 게인 (보행 중 pitch 복원력 강화)
         kp_roll = 0.5
-        kp_pitch = 0.5
+        kp_pitch = 1.0
 
         for i in range(4):
             leg_phi = (phi + self.leg_phases[i]) % 1.0
@@ -80,6 +87,9 @@ class GaitPlanner:
             # --- [보폭 및 회전 계산] ---
             stride_x = vx * (self.period * (1.0 - self.duty_factor))
             stride_y = vy * (self.period * (1.0 - self.duty_factor))
+            # front_x_offset=0.17 기준 IK 최대 도달 범위 초과 방지
+            stride_x = max(-self.max_stride, min(self.max_stride, stride_x))
+            stride_y = max(-self.max_stride, min(self.max_stride, stride_y))
 
             turn_radius = 0.15 
             stride_yaw_x = -omega * turn_radius * side_sign * (self.period * (1.0 - self.duty_factor))
