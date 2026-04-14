@@ -25,7 +25,8 @@ setup(
     entry_points={
         'console_scripts': [
             'gait_node = quadruped_gait.gait_node:main',
-            'stm32_bridge = quadruped_gait.stm32_bridge:main'
+            'stm32_bridge = quadruped_gait.stm32_bridge:main',
+            'hardware_bridge = quadruped_gait.hardware_bridge:main',
         ],
     },
 )
