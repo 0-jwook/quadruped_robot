@@ -25,7 +25,11 @@ class GaitPlanner:
         self.front_x_offset = 0.0
         self.rear_x_offset = 0.0
         
-        self.last_angles = [[0.0, 0.6, -1.2] for _ in range(4)]
+        # 중립 자세(기립) 기준값: body_height=0.27, L2=L3=0.2, L1=0.08 기준으로 계산된 값
+        # 하드웨어 서보 각도 변환의 기준점으로도 사용됨
+        self.Q2_NEUTRAL = -0.8327  # rad
+        self.Q3_NEUTRAL =  1.6597  # rad
+        self.last_angles = [[0.0, self.Q2_NEUTRAL, self.Q3_NEUTRAL] for _ in range(4)]
 
     def get_stand_posture(self, roll=0.0, pitch=0.0):
         """정지 상태 자세 (IMU 피드백 반영)"""
