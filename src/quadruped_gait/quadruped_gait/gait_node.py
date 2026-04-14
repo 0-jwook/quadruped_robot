@@ -3,6 +3,7 @@ from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from sensor_msgs.msg import Imu
+from std_msgs.msg import Float32
 import math
 
 # 분리된 파일에서 클래스 임포트
@@ -40,16 +41,22 @@ class GaitNode(Node):
         # ROS2 통신 설정
         self.subscription = self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 10)
         self.imu_sub = self.create_subscription(Imu, '/imu', self.imu_callback, 10)
+        self.height_sub = self.create_subscription(Float32, '/body_height_cmd', self.height_callback, 10)
         self.publisher = self.create_publisher(JointTrajectory, '/joint_trajectory_controller/joint_trajectory', 10)
-        
+
         # 타이머 주기 설정 (50Hz = 0.02s)
         self.dt = 0.02
         self.timer = self.create_timer(self.dt, self.timer_callback)
-        
+
         # 상태 변수
         self.cmd_vx, self.cmd_vy, self.cmd_omega = 0.0, 0.0, 0.0
         self.roll, self.pitch, self.yaw = 0.0, 0.0, 0.0
         self.init_t = None
+
+        # 몸체 높이 제어 (t=올리기, b=낮추기)
+        self.target_body_height = self.planner.body_height   # 기본값 0.27m
+        self.current_body_height = self.planner.body_height
+        self.height_rate = 0.005  # 50Hz 기준 0.25 m/s 속도로 부드럽게 전환
         
         self.joint_names = [
             'front_left_shoulder_joint', 'front_left_leg_joint', 'front_left_foot_joint',
@@ -70,6 +77,10 @@ class GaitNode(Node):
         """IMU 데이터 수신 (자세 제어를 위한 Roll, Pitch 추출)"""
         self.roll, self.pitch, self.yaw = euler_from_quaternion(msg.orientation)
 
+    def height_callback(self, msg):
+        """몸체 높이 명령 수신 (teleop_key의 t/b 키)"""
+        self.target_body_height = max(0.15, min(0.35, float(msg.data)))
+
     def timer_callback(self):
         """메인 제어 루프"""
         now = self.get_clock().now()
@@ -81,13 +92,21 @@ class GaitNode(Node):
             
         elapsed = t - self.init_t
         
+        # 높이 부드럽게 전환 (0.25 m/s)
+        diff = self.target_body_height - self.current_body_height
+        if abs(diff) > 0.001:
+            self.current_body_height += math.copysign(min(self.height_rate, abs(diff)), diff)
+
         # 1. 속도 명령 유무에 따른 자세 결정 (데드존 적용)
         is_moving = abs(self.cmd_vx) > 0.01 or abs(self.cmd_vy) > 0.01 or abs(self.cmd_omega) > 0.01
-        
+
         if not is_moving:
-            joint_angles = self.planner.get_stand_posture(self.roll, self.pitch)
+            joint_angles = self.planner.get_stand_posture(
+                self.roll, self.pitch, self.current_body_height)
         else:
-            joint_angles = self.planner.get_walk_posture(self.cmd_vx, self.cmd_vy, self.cmd_omega, elapsed, self.roll, self.pitch)
+            joint_angles = self.planner.get_walk_posture(
+                self.cmd_vx, self.cmd_vy, self.cmd_omega, elapsed,
+                self.roll, self.pitch, self.current_body_height)
 
         # 2. 메시지 생성 및 발행
         msg = JointTrajectory()

@@ -27,6 +27,7 @@ setup(
             'gait_node = quadruped_gait.gait_node:main',
             'stm32_bridge = quadruped_gait.stm32_bridge:main',
             'hardware_bridge = quadruped_gait.hardware_bridge:main',
+            'teleop_key = quadruped_gait.teleop_key:main',
         ],
     },
 )
