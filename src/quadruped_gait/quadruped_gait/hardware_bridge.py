@@ -31,6 +31,16 @@ def _clamp(val: float, lo: float = 0.0, hi: float = 180.0) -> float:
     return max(lo, min(hi, val))
 
 
+def _crc8(data: bytes) -> int:
+    """CRC-8 (polynomial 0x07, init 0x00) — MCU CRC8Update()와 동일 알고리즘"""
+    crc = 0x00
+    for byte in data:
+        crc ^= byte
+        for _ in range(8):
+            crc = ((crc << 1) ^ 0x07) & 0xFF if (crc & 0x80) else (crc << 1) & 0xFF
+    return crc
+
+
 def _rpy_to_quaternion(roll: float, pitch: float, yaw: float):
     """Roll/Pitch/Yaw (rad) → 쿼터니언 (x, y, z, w)"""
     cr, cp, cy = math.cos(roll / 2), math.cos(pitch / 2), math.cos(yaw / 2)
@@ -129,7 +139,7 @@ class HardwareBridge(Node):
         length = 48
         
         payload = struct.pack('<12f', *angles)
-        checksum = (packet_id + length + sum(payload)) & 0xFF
+        checksum = _crc8(bytes([packet_id, length]) + payload)
         
         packet = header + bytes([packet_id, length]) + payload + bytes([checksum])
 
