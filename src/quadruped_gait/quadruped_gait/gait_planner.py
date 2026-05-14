@@ -42,7 +42,8 @@ class GaitPlanner:
             (+0.025, -0.010),   # RL
             (+0.025, +0.010),   # RR
         ]
-        self._pre_swing_blend = 0.10  # 스윙 10% 전부터 미리 이동 시작
+        self._pre_swing_blend  = 0.10  # 스윙 10% 전부터 미리 이동 시작
+        self._post_swing_blend = 0.05  # 스윙 끝 5% 구간에서 선형 감소 (순간 급락 방지)
 
         # 중립 자세 기준값: body_height=0.13m, L1=0.042, L2=0.075, L3=0.095
         self.Q2_NEUTRAL = -0.5408
@@ -54,19 +55,25 @@ class GaitPlanner:
         """
         현재 위상 phi에서 몸통 이동량 (bs_x, bs_y) 반환.
 
-        스윙 직전(pre_swing 구간)부터 선형으로 증가하고,
-        스윙 중에는 최대값을 유지합니다.
-
-        반환값을 발 타겟에서 빼면(step -= bs) 몸통이 앞/옆으로 이동하는 효과.
+        pre_swing 구간: 선형 증가 (스윙 10% 전부터)
+        swing 구간:    최대값 유지
+        post_swing 구간: 선형 감소 (스윙 끝 5% 구간)
+          → 스탠스 전환 시 순간 급락을 방지해 덜컹거림 제거.
         """
         bs_x, bs_y = 0.0, 0.0
-        pre = self._pre_swing_blend
+        pre  = self._pre_swing_blend
+        post = self._post_swing_blend
+        swing_dur = 1.0 - self.duty_factor          # = 0.25
+        post_start = self.duty_factor + swing_dur - post  # = 0.95
 
         for i in range(4):
             leg_phi = (phi + self.leg_phases[i]) % 1.0
 
-            if leg_phi >= self.duty_factor:
-                weight = 1.0                                         # 스윙 중: 완전 적용
+            if leg_phi >= post_start:
+                # 스윙 후반부: 1.0 → 0.0 선형 감소
+                weight = (1.0 - leg_phi) / post
+            elif leg_phi >= self.duty_factor:
+                weight = 1.0                                         # 스윙 중반: 완전 적용
             elif leg_phi >= (self.duty_factor - pre):
                 weight = (leg_phi - (self.duty_factor - pre)) / pre  # 준비 구간: 선형 증가
             else:

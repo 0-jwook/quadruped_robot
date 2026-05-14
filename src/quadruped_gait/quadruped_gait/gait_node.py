@@ -79,7 +79,7 @@ class GaitNode(Node):
 
     def height_callback(self, msg):
         """몸체 높이 명령 수신 (teleop_key의 t/b 키)"""
-        self.target_body_height = max(0.08, min(0.16, float(msg.data)))
+        self.target_body_height = max(0.09, min(0.14, float(msg.data)))
 
     def timer_callback(self):
         """메인 제어 루프"""

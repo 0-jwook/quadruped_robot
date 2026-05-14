@@ -49,8 +49,8 @@ HELP = """
   w/s : 전진 / 후진
   a/d : 좌회전 / 우회전
   q/e : 좌 횡이동 / 우 횡이동
-  t   : 몸체 올리기 (다리 펴짐)
-  b   : 몸체 낮추기 (다리 굽힘)
+  t   : 몸체 올리기 (다리 펴짐, 최대 0.14m)
+  b   : 몸체 낮추기 (다리 굽힘, 최소 0.09m)
   Space/x : 정지
   Ctrl+C  : 종료
 ---------------------------------
@@ -73,12 +73,12 @@ class TeleopKey(Node):
     def __init__(self):
         super().__init__('teleop_key')
 
-        self.declare_parameter('linear_speed',  0.3)
-        self.declare_parameter('angular_speed', 0.8)
-        self.declare_parameter('height_step',   0.02)
-        self.declare_parameter('height_min',    0.15)
-        self.declare_parameter('height_max',    0.35)
-        self.declare_parameter('default_height', 0.27)
+        self.declare_parameter('linear_speed',  0.15)
+        self.declare_parameter('angular_speed', 0.6)
+        self.declare_parameter('height_step',   0.01)
+        self.declare_parameter('height_min',    0.09)
+        self.declare_parameter('height_max',    0.14)
+        self.declare_parameter('default_height', 0.13)
 
         self._lin  = self.get_parameter('linear_speed').value
         self._ang  = self.get_parameter('angular_speed').value
