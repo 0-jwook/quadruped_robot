@@ -2,34 +2,28 @@ import math
 
 class GaitPlanner:
     """
-    한 번에 한 다리만 움직여 극강의 안정성을 제공하면서도,
-    어깨 관절(Shoulder)을 활용해 회전과 횡이동이 가능한 Wave Gait 플래너입니다.
-    보폭 제한을 제거하여 입력 속도에 따른 역동적인 움직임이 가능합니다.
+    대각선 두 다리가 동시에 움직이는 Trot Gait 플래너입니다.
+    FL+RR 쌍과 FR+RL 쌍이 교대로 스윙하며, 항상 대각 지지선 위에
+    무게중심이 위치하여 후방 편향 로봇에서도 안정적으로 전진합니다.
     """
     def __init__(self, kinematics):
         self.kin = kinematics
-        
+
         # --- [물리 파라미터] ---
         # 실제 하드웨어: L2=0.075m, L3=0.095m → 최대 도달 0.17m
         self.body_height = 0.13   # 기본 자세: 최대 도달의 76% (무릎 자연스럽게 굽힘)
-        self.step_height = 0.025  # 실제 다리 길이에 맞춘 step_height
-        self.period = 1.75
-        
-        # --- [Wave Gait 핵심 설정] ---
-        # Duty Factor 0.75: 세 다리가 땅을 짚고 한 다리만 이동 (안정성 극대화)
-        self.duty_factor = 0.75    
-        
-        # 다리별 페이즈 오프셋 (LH -> LF -> RH -> RF 순차 이동)
-        self.leg_phases = [0.25, 0.75, 0.0, 0.5] 
-        
-        # --- [무게중심 안정성 설정] ---
-        # front_x_offset: 앞발 기준점을 어깨 관절보다 전방으로 배치.
-        # Wave gait에서 앞발 1개가 Swing 중일 때 지지 삼각형(나머지 3발)의
-        # 무게중심이 삼각형 안에 들어오려면 기하학적으로 ≥0.16m 이 필요.
-        # (front_x_offset=0일 때 CoM이 지지 삼각형 경계선 위 → 윌리 발생)
-        # ">" 자세: 발이 어깨보다 앞에 있어야 허벅지가 앞으로 기울어짐
-        self.front_x_offset = 0.06   # 앞발: 어깨보다 6cm 전방 (CoM 후방 편향 보정)
-        self.rear_x_offset  = -0.02  # 뒷발: 어깨보다 2cm 후방 (지지 면적 확대)
+        self.step_height = 0.030  # Trot: 두 다리 동시 스윙이라 지면 여유 필요
+        self.period = 1.0         # Trot 주기 (Wave 1.75s → Trot 1.0s)
+
+        # --- [Trot Gait 핵심 설정] ---
+        # Duty Factor 0.5: 대각선 두 다리 동시 스윙 (FL+RR / FR+RL)
+        # 항상 대각 지지선 위에 CoM이 위치 → 후방 편향 로봇에 유리
+        self.duty_factor = 0.5
+        self.leg_phases  = [0.0, 0.5, 0.5, 0.0]  # FL+RR 동기 / FR+RL 동기
+
+        # Trot은 대각 지지라 Wave만큼 전방 편향이 필요 없음
+        self.front_x_offset = 0.04   # 앞발: 어깨보다 4cm 전방
+        self.rear_x_offset  = -0.01  # 뒷발: 어깨보다 1cm 후방
 
         # L2+L3=0.17m, h=0.13m → 수평 최대 도달 = sqrt(0.17²-0.13²) = 0.109m
         self.max_stride = 0.03      # 보폭 상한 (m)
