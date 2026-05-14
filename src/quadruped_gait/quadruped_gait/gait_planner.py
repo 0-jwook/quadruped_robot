@@ -28,8 +28,8 @@ class GaitPlanner:
         # 무게중심이 삼각형 안에 들어오려면 기하학적으로 ≥0.16m 이 필요.
         # (front_x_offset=0일 때 CoM이 지지 삼각형 경계선 위 → 윌리 발생)
         # ">" 자세: 발이 어깨보다 앞에 있어야 허벅지가 앞으로 기울어짐
-        self.front_x_offset = 0.03   # 앞발: 어깨보다 3cm 전방 (실제 다리 길이 기준)
-        self.rear_x_offset  = 0.0   # 뒷발: 어깨 바로 아래
+        self.front_x_offset = 0.06   # 앞발: 어깨보다 6cm 전방 (CoM 후방 편향 보정)
+        self.rear_x_offset  = -0.02  # 뒷발: 어깨보다 2cm 후방 (지지 면적 확대)
 
         # L2+L3=0.17m, h=0.13m → 수평 최대 도달 = sqrt(0.17²-0.13²) = 0.109m
         self.max_stride = 0.03      # 보폭 상한 (m)
