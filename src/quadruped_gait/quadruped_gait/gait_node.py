@@ -35,16 +35,16 @@ class GaitNode(Node):
         super().__init__('gait_node')
 
         # ── 다리 치수 파라미터 (하드웨어 기본값; 시뮬레이션은 launch 파일에서 재정의)
-        self.declare_parameter('L1', 0.042)   # 어깨→허벅지 축 거리
-        self.declare_parameter('L2', 0.075)   # 허벅지 길이
-        self.declare_parameter('L3', 0.095)   # 종아리 길이
-        # ── 보행 파라미터
-        self.declare_parameter('body_height', 0.13)
-        self.declare_parameter('step_height', 0.035)
+        # 실제 로봇 치수: L1=3cm, L2=11.5cm, L3=13.5cm (최대 도달 25cm)
+        self.declare_parameter('L1', 0.030)
+        self.declare_parameter('L2', 0.115)
+        self.declare_parameter('L3', 0.135)
+        self.declare_parameter('body_height', 0.17)
+        self.declare_parameter('step_height', 0.04)
         self.declare_parameter('max_stride',  0.03)
         self.declare_parameter('period',      1.5)
-        self.declare_parameter('height_min',  0.09)
-        self.declare_parameter('height_max',  0.14)
+        self.declare_parameter('height_min',  0.11)
+        self.declare_parameter('height_max',  0.21)
 
         L1 = self.get_parameter('L1').value
         L2 = self.get_parameter('L2').value
