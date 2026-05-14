@@ -4,42 +4,51 @@
   <material name="black"><color rgba="0.1 0.1 0.1 1"/></material>
   <material name="yellow"><color rgba="0.9 0.8 0.0 1"/></material>
   <xacro:property name="PI" value="3.1415926535"/>
+  <!-- 실제 로봇 치수: L1=0.03m, L2=0.115m, L3=0.135m, 몸통길이=0.245m -->
+  <xacro:property name="L1" value="0.03"/>    <!-- 어깨→허벅지 축 오프셋 -->
+  <xacro:property name="L2" value="0.115"/>   <!-- 허벅지 길이 -->
+  <xacro:property name="L3" value="0.135"/>   <!-- 종아리 길이 -->
+  <xacro:property name="BODY_L" value="0.245"/>
+  <xacro:property name="BODY_W" value="0.14"/>
+  <xacro:property name="BODY_H" value="0.08"/>
+  <xacro:property name="HIP_X"  value="0.1225"/>  <!-- BODY_L/2 -->
+  <xacro:property name="HIP_Y"  value="0.07"/>    <!-- BODY_W/2 -->
+  <xacro:property name="HIP_Z"  value="${BODY_H/2}"/>
   <link name="base_footprint"/>
   <joint name="base_joint" type="fixed"><parent link="base_footprint"/><child link="base_link"/><origin xyz="0 0 0"/></joint>
   <link name="base_link">
-  <visual><origin xyz="0 0 0.1"/><geometry><box size="0.4 0.24 0.1"/></geometry><material name="blue"/></visual>
-  <collision><origin xyz="0 0 0.1"/><geometry><box size="0.4 0.24 0.1"/></geometry></collision>
-  
+  <visual><origin xyz="0 0 ${BODY_H/2}"/><geometry><box size="${BODY_L} ${BODY_W} ${BODY_H}"/></geometry><material name="blue"/></visual>
+  <collision><origin xyz="0 0 ${BODY_H/2}"/><geometry><box size="${BODY_L} ${BODY_W} ${BODY_H}"/></geometry></collision>
   <inertial>
-    <origin xyz="0.08 0 0.1"/> 
-    <mass value="4.0"/>
-    <inertia ixx="0.0229" iyy="0.0567" izz="0.0731" ixy="0" ixz="0" iyz="0"/>
+    <origin xyz="0 0 ${BODY_H/2}"/>
+    <mass value="2.5"/>
+    <inertia ixx="0.0082" iyy="0.0155" izz="0.0212" ixy="0" ixz="0" iyz="0"/>
   </inertial>
 </link>
   <xacro:macro name="simple_leg" params="pos x y reflect">
-    <joint name="${pos}_shoulder_joint" type="revolute"><parent link="base_link"/><child link="${pos}_shoulder_link"/><axis xyz="1 0 0"/><origin xyz="${x} ${y} 0.1"/><limit effort="1000.0" lower="-3.14" upper="3.14" velocity="2.0"/><dynamics damping="0.1" friction="0.05"/></joint>
-    <link name="${pos}_shoulder_link"><visual><origin rpy="${PI/2} 0 0" xyz="0 ${reflect*0.04} 0"/><geometry><cylinder radius="0.04" length="0.08"/></geometry><material name="black"/></visual><inertial><mass value="0.4"/><inertia ixx="0.0229" iyy="0.0567" izz="0.0731" ixy="0" ixz="0" iyz="0"/></inertial></link>
-    <joint name="${pos}_leg_joint" type="revolute"><parent link="${pos}_shoulder_link"/><child link="${pos}_leg_link"/><axis xyz="0 1 0"/><origin xyz="0 ${reflect*0.08} 0"/><limit effort="1000.0" lower="-2.6" upper="2.6" velocity="2.0"/><dynamics damping="0.1" friction="0.05"/></joint>
-    <link name="${pos}_leg_link"><visual><origin xyz="0 0 -0.1"/><geometry><box size="0.04 0.04 0.2"/></geometry><material name="yellow"/></visual><collision><origin xyz="0 0 -0.1"/><geometry><box size="0.04 0.04 0.2"/></geometry></collision><inertial><origin xyz="0 0 -0.1"/><mass value="0.4"/><inertia ixx="0.00139" iyy="0.00139" izz="0.00011" ixy="0" ixz="0" iyz="0"/></inertial></link>
-    <joint name="${pos}_foot_joint" type="revolute"><parent link="${pos}_leg_link"/><child link="${pos}_foot_link"/><axis xyz="0 1 0"/><origin xyz="0 0 -0.2"/><limit effort="1000.0" lower="-2.6" upper="2.6" velocity="2.0"/><dynamics damping="0.1" friction="0.05"/></joint>
-    <link name="${pos}_foot_link"><visual><origin xyz="0 0 -0.1"/><geometry><box size="0.03 0.03 0.2"/></geometry><material name="black"/></visual><collision><origin xyz="0 0 -0.1"/><geometry><box size="0.03 0.03 0.2"/></geometry></collision><inertial><origin xyz="0 0 -0.1"/><mass value="0.4"/><inertia ixx="0.00135" iyy="0.00135" izz="0.00006" ixy="0" ixz="0" iyz="0"/></inertial></link>
-    <link name="${pos}_toe_link"><visual><geometry><sphere radius="0.03"/></geometry><material name="black"/></visual><collision><geometry><sphere radius="0.03"/></geometry></collision><inertial><mass value="0.2"/><inertia ixx="0.01" iyy="0.01" izz="0.01" ixy="0" ixz="0" iyz="0"/></inertial></link>
-    <joint name="${pos}_toe_joint" type="fixed"><parent link="${pos}_foot_link"/><child link="${pos}_toe_link"/><origin xyz="0.01 0 -0.2"/></joint>
+    <joint name="${pos}_shoulder_joint" type="revolute"><parent link="base_link"/><child link="${pos}_shoulder_link"/><axis xyz="1 0 0"/><origin xyz="${x} ${y} ${HIP_Z}"/><limit effort="300.0" lower="-1.57" upper="1.57" velocity="3.0"/><dynamics damping="0.05" friction="0.02"/></joint>
+    <link name="${pos}_shoulder_link"><visual><origin rpy="${PI/2} 0 0" xyz="0 ${reflect*L1/2} 0"/><geometry><cylinder radius="0.02" length="${L1}"/></geometry><material name="black"/></visual><inertial><mass value="0.15"/><inertia ixx="0.0001" iyy="0.0001" izz="0.0001" ixy="0" ixz="0" iyz="0"/></inertial></link>
+    <joint name="${pos}_leg_joint" type="revolute"><parent link="${pos}_shoulder_link"/><child link="${pos}_leg_link"/><axis xyz="0 1 0"/><origin xyz="0 ${reflect*L1} 0"/><limit effort="300.0" lower="-2.6" upper="2.6" velocity="3.0"/><dynamics damping="0.05" friction="0.02"/></joint>
+    <link name="${pos}_leg_link"><visual><origin xyz="0 0 ${-L2/2}"/><geometry><box size="0.03 0.03 ${L2}"/></geometry><material name="yellow"/></visual><collision><origin xyz="0 0 ${-L2/2}"/><geometry><box size="0.03 0.03 ${L2}"/></geometry></collision><inertial><origin xyz="0 0 ${-L2/2}"/><mass value="0.25"/><inertia ixx="0.00030" iyy="0.00030" izz="0.00006" ixy="0" ixz="0" iyz="0"/></inertial></link>
+    <joint name="${pos}_foot_joint" type="revolute"><parent link="${pos}_leg_link"/><child link="${pos}_foot_link"/><axis xyz="0 1 0"/><origin xyz="0 0 ${-L2}"/><limit effort="300.0" lower="-2.6" upper="2.6" velocity="3.0"/><dynamics damping="0.05" friction="0.02"/></joint>
+    <link name="${pos}_foot_link"><visual><origin xyz="0 0 ${-L3/2}"/><geometry><box size="0.025 0.025 ${L3}"/></geometry><material name="black"/></visual><collision><origin xyz="0 0 ${-L3/2}"/><geometry><box size="0.025 0.025 ${L3}"/></geometry></collision><inertial><origin xyz="0 0 ${-L3/2}"/><mass value="0.15"/><inertia ixx="0.00023" iyy="0.00023" izz="0.00004" ixy="0" ixz="0" iyz="0"/></inertial></link>
+    <link name="${pos}_toe_link"><visual><geometry><sphere radius="0.02"/></geometry><material name="black"/></visual><collision><geometry><sphere radius="0.02"/></geometry></collision><inertial><mass value="0.05"/><inertia ixx="0.000008" iyy="0.000008" izz="0.000008" ixy="0" ixz="0" iyz="0"/></inertial></link>
+    <joint name="${pos}_toe_joint" type="fixed"><parent link="${pos}_foot_link"/><child link="${pos}_toe_link"/><origin xyz="0.01 0 ${-L3}"/></joint>
     <gazebo reference="${pos}_toe_link"><kp>1000000</kp>
-<kd>80</kd>
+<kd>100</kd>
 <maxVel>1.0</maxVel>
-<minDepth>0.003</minDepth>
+<minDepth>0.002</minDepth>
 <mu1>2.0</mu1>
 <mu2>2.0</mu2></gazebo>
   </xacro:macro>
-  <xacro:simple_leg pos="front_left"  x="0.2"  y="0.12"  reflect="1"/>
-  <xacro:simple_leg pos="front_right" x="0.2"  y="-0.12" reflect="-1"/>
-  <xacro:simple_leg pos="rear_left"   x="-0.2" y="0.12"  reflect="1"/>
-  <xacro:simple_leg pos="rear_right"  x="-0.2" y="-0.12" reflect="-1"/>
+  <xacro:simple_leg pos="front_left"  x="${HIP_X}"  y="${HIP_Y}"  reflect="1"/>
+  <xacro:simple_leg pos="front_right" x="${HIP_X}"  y="${-HIP_Y}" reflect="-1"/>
+  <xacro:simple_leg pos="rear_left"   x="${-HIP_X}" y="${HIP_Y}"  reflect="1"/>
+  <xacro:simple_leg pos="rear_right"  x="${-HIP_X}" y="${-HIP_Y}" reflect="-1"/>
   <ros2_control name="GazeboSystem" type="system"><hardware><plugin>gazebo_ros2_control/GazeboSystem</plugin></hardware>
     <xacro:macro name="ji" params="name">
     <joint name="${name}">
-      <command_interface name="effort"/>  <!-- position → effort 변경 -->
+      <command_interface name="effort"/>
       <state_interface name="position"/>
       <state_interface name="velocity"/>
     </joint>

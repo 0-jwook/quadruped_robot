@@ -49,8 +49,8 @@ def generate_launch_description():
     spawn_entity = Node(
         package='gazebo_ros',
         executable='spawn_entity.py',
-        # body_height=0.26 → 발이 베이스 링크 기준 -0.16m → 지면 접지 여유 포함 0.30m
-        arguments=['-topic', 'robot_description', '-entity', 'quadruped', '-z', '0.30'],
+        # hip_z=BODY_H/2=0.04m, body_height=0.17m → 발 z=-0.13m → 토구 z≈-0.15m → spawn 0.20m
+        arguments=['-topic', 'robot_description', '-entity', 'quadruped', '-z', '0.20'],
         output='screen'
     )
 
@@ -66,22 +66,22 @@ def generate_launch_description():
         arguments=['joint_trajectory_controller']
     )
 
-    # URDF 치수: shoulder_offset=0.08m, thigh=0.2m, calf=0.2m (max_reach=0.4m)
+    # 실제 로봇 치수와 동일: L1=0.03m, L2=0.115m, L3=0.135m (max_reach=0.25m)
     gait_node = Node(
         package='quadruped_gait',
         executable='gait_node',
         name='gait_node',
         parameters=[{
             'use_sim_time': True,
-            'L1': 0.08,
-            'L2': 0.20,
-            'L3': 0.20,
-            'body_height': 0.26,
-            'step_height': 0.06,
-            'max_stride':  0.05,
+            'L1': 0.030,
+            'L2': 0.115,
+            'L3': 0.135,
+            'body_height': 0.17,
+            'step_height': 0.04,
+            'max_stride':  0.03,
             'period':      1.2,
-            'height_min':  0.18,
-            'height_max':  0.30,
+            'height_min':  0.11,
+            'height_max':  0.21,
         }]
     )
 
