@@ -35,7 +35,7 @@ class GaitNode(Node):
         super().__init__('gait_node')
         
         # 하드웨어 파라미터 초기화
-        self.kin = LegKinematics(L1=0.08, L2=0.2, L3=0.2)
+        self.kin = LegKinematics(L1=0.042, L2=0.075, L3=0.095)
         self.planner = GaitPlanner(self.kin)
         
         # ROS2 통신 설정
@@ -54,7 +54,7 @@ class GaitNode(Node):
         self.init_t = None
 
         # 몸체 높이 제어 (t=올리기, b=낮추기)
-        self.target_body_height = self.planner.body_height   # 기본값 0.27m
+        self.target_body_height = self.planner.body_height   # 기본값 0.13m
         self.current_body_height = self.planner.body_height
         self.height_rate = 0.005  # 50Hz 기준 0.25 m/s 속도로 부드럽게 전환
         
@@ -79,7 +79,7 @@ class GaitNode(Node):
 
     def height_callback(self, msg):
         """몸체 높이 명령 수신 (teleop_key의 t/b 키)"""
-        self.target_body_height = max(0.15, min(0.35, float(msg.data)))
+        self.target_body_height = max(0.08, min(0.16, float(msg.data)))
 
     def timer_callback(self):
         """메인 제어 루프"""
