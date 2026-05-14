@@ -33,30 +33,50 @@ def euler_from_quaternion(q):
 class GaitNode(Node):
     def __init__(self):
         super().__init__('gait_node')
-        
-        # 하드웨어 파라미터 초기화
-        self.kin = LegKinematics(L1=0.042, L2=0.075, L3=0.095)
-        self.planner = GaitPlanner(self.kin)
-        
+
+        # ── 다리 치수 파라미터 (하드웨어 기본값; 시뮬레이션은 launch 파일에서 재정의)
+        self.declare_parameter('L1', 0.042)   # 어깨→허벅지 축 거리
+        self.declare_parameter('L2', 0.075)   # 허벅지 길이
+        self.declare_parameter('L3', 0.095)   # 종아리 길이
+        # ── 보행 파라미터
+        self.declare_parameter('body_height', 0.13)
+        self.declare_parameter('step_height', 0.035)
+        self.declare_parameter('max_stride',  0.03)
+        self.declare_parameter('period',      1.5)
+        self.declare_parameter('height_min',  0.09)
+        self.declare_parameter('height_max',  0.14)
+
+        L1 = self.get_parameter('L1').value
+        L2 = self.get_parameter('L2').value
+        L3 = self.get_parameter('L3').value
+        bh = self.get_parameter('body_height').value
+        sh = self.get_parameter('step_height').value
+        ms = self.get_parameter('max_stride').value
+        p  = self.get_parameter('period').value
+        self._height_min = self.get_parameter('height_min').value
+        self._height_max = self.get_parameter('height_max').value
+
+        self.kin     = LegKinematics(L1=L1, L2=L2, L3=L3)
+        self.planner = GaitPlanner(self.kin,
+                                   body_height=bh, step_height=sh,
+                                   max_stride=ms, period=p)
+
         # ROS2 통신 설정
         self.subscription = self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 10)
         self.imu_sub = self.create_subscription(Imu, '/imu', self.imu_callback, 10)
         self.height_sub = self.create_subscription(Float32, '/body_height_cmd', self.height_callback, 10)
         self.publisher = self.create_publisher(JointTrajectory, '/joint_trajectory_controller/joint_trajectory', 10)
 
-        # 타이머 주기 설정 (50Hz = 0.02s)
         self.dt = 0.02
         self.timer = self.create_timer(self.dt, self.timer_callback)
 
-        # 상태 변수
         self.cmd_vx, self.cmd_vy, self.cmd_omega = 0.0, 0.0, 0.0
         self.roll, self.pitch, self.yaw = 0.0, 0.0, 0.0
         self.init_t = None
 
-        # 몸체 높이 제어 (t=올리기, b=낮추기)
-        self.target_body_height = self.planner.body_height   # 기본값 0.13m
-        self.current_body_height = self.planner.body_height
-        self.height_rate = 0.005  # 50Hz 기준 0.25 m/s 속도로 부드럽게 전환
+        self.target_body_height  = bh
+        self.current_body_height = bh
+        self.height_rate = 0.005
         
         self.joint_names = [
             'front_left_shoulder_joint', 'front_left_leg_joint', 'front_left_foot_joint',
@@ -79,7 +99,7 @@ class GaitNode(Node):
 
     def height_callback(self, msg):
         """몸체 높이 명령 수신 (teleop_key의 t/b 키)"""
-        self.target_body_height = max(0.09, min(0.14, float(msg.data)))
+        self.target_body_height = max(self._height_min, min(self._height_max, float(msg.data)))
 
     def timer_callback(self):
         """메인 제어 루프"""

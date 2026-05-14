@@ -10,44 +10,45 @@ class GaitPlanner:
 
     스윙 순서: FR → RR → FL → RL
     """
-    def __init__(self, kinematics):
+    def __init__(self, kinematics,
+                 body_height=0.13, step_height=0.035,
+                 max_stride=0.03,  period=1.5):
         self.kin = kinematics
 
-        # --- [물리 파라미터] ---
-        # 실제 하드웨어: L2=0.075m, L3=0.095m → 최대 도달 0.17m
-        self.body_height = 0.13
-        self.step_height = 0.035  # SpotMicro 50mm를 다리 길이 비율로 스케일링
-        self.period      = 1.5    # 한 사이클 (swing_time ≈ 0.375s/다리)
+        self.body_height = body_height
+        self.step_height = step_height
+        self.period      = period
 
-        # --- [Wave Gait 설정] ---
-        # Duty Factor 0.75: 항상 3개 다리가 지면 지지 → 안정적 지지 삼각형
         self.duty_factor = 0.75
         # 스윙 순서: FR(0~25%) → RR(25~50%) → FL(50~75%) → RL(75~100%)
         self.leg_phases  = [0.25, 0.75, 0.0, 0.5]   # [FL, FR, RL, RR]
 
         self.front_x_offset = 0.04
         self.rear_x_offset  = -0.01
-        self.max_stride     = 0.03
+        self.max_stride     = max_stride
 
-        # --- [Body Shift 설정] ---
-        # 각 다리 스윙 시 몸통 이동량 [dx(앞+), dy(왼쪽+)]
-        # 지지 삼각형의 무게중심 방향으로 이동
-        #   FL 스윙: 지지 = FR+RL+RR → 오른쪽으로
-        #   FR 스윙: 지지 = FL+RL+RR → 왼쪽으로
-        #   RL 스윙: 지지 = FL+FR+RR → 앞+오른쪽 (후방편향 보정 강화)
-        #   RR 스윙: 지지 = FL+FR+RL → 앞+왼쪽
+        # Body Shift: 다리 치수에 비례해 자동 스케일
+        sx_f = 0.20 * self.kin.L2   # 앞다리 전방 이동
+        sx_r = 0.28 * self.kin.L2   # 뒷다리 전방 이동 (후방 편향 보정)
+        sy_f = 0.48 * self.kin.L1   # 앞다리 좌우 이동
+        sy_r = 0.24 * self.kin.L1   # 뒷다리 좌우 이동
         self._leg_shifts = [
-            (+0.015, -0.020),   # FL
-            (+0.015, +0.020),   # FR
-            (+0.025, -0.010),   # RL
-            (+0.025, +0.010),   # RR
+            (+sx_f, -sy_f),   # FL
+            (+sx_f, +sy_f),   # FR
+            (+sx_r, -sy_r),   # RL
+            (+sx_r, +sy_r),   # RR
         ]
-        self._pre_swing_blend  = 0.10  # 스윙 10% 전부터 미리 이동 시작
-        self._post_swing_blend = 0.05  # 스윙 끝 5% 구간에서 선형 감소 (순간 급락 방지)
+        self._pre_swing_blend  = 0.10
+        self._post_swing_blend = 0.05
 
-        # 중립 자세 기준값: body_height=0.13m, L1=0.042, L2=0.075, L3=0.095
-        self.Q2_NEUTRAL = -0.5408
-        self.Q3_NEUTRAL =  1.3479
+        # 중립 자세 기준값 — IK로 자동 계산 (body_height, 치수에 따라 달라짐)
+        res = self.kin.ik(self.front_x_offset, self.kin.L1, -self.body_height, leg_id=0)
+        if res:
+            self.Q2_NEUTRAL = res[1]
+            self.Q3_NEUTRAL = res[2]
+        else:
+            self.Q2_NEUTRAL = -0.54
+            self.Q3_NEUTRAL =  1.35
         self.last_angles = [[0.0, self.Q2_NEUTRAL, self.Q3_NEUTRAL] for _ in range(4)]
 
     # ──────────────────────────────────────────────────────────────────────────
