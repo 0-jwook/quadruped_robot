@@ -20,8 +20,8 @@ class GaitPlanner:
         self.period      = period
 
         self.duty_factor = 0.75
-        # 스윙 순서: FR(0~25%) → RR(25~50%) → FL(50~75%) → RL(75~100%)
-        self.leg_phases  = [0.25, 0.75, 0.0, 0.5]   # [FL, FR, RL, RR]
+        # 스윙 순서: RL→FR→RR→FL (대각선 교차, SpotMicro 방식)
+        self.leg_phases  = [0.875, 0.375, 0.125, 0.625]   # [FL, FR, RL, RR]
 
         self.front_x_offset = 0.04
         self.rear_x_offset  = -0.01
