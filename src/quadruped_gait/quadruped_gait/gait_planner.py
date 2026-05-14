@@ -10,9 +10,10 @@ class GaitPlanner:
         self.kin = kinematics
         
         # --- [물리 파라미터] ---
-        self.body_height = 0.27
-        self.step_height = 0.1    
-        self.period = 1.75          
+        # 실제 하드웨어: L2=0.075m, L3=0.095m → 최대 도달 0.17m
+        self.body_height = 0.13   # 기본 자세: 최대 도달의 76% (무릎 자연스럽게 굽힘)
+        self.step_height = 0.025  # 실제 다리 길이에 맞춘 step_height
+        self.period = 1.75
         
         # --- [Wave Gait 핵심 설정] ---
         # Duty Factor 0.75: 세 다리가 땅을 짚고 한 다리만 이동 (안정성 극대화)
@@ -26,16 +27,16 @@ class GaitPlanner:
         # Wave gait에서 앞발 1개가 Swing 중일 때 지지 삼각형(나머지 3발)의
         # 무게중심이 삼각형 안에 들어오려면 기하학적으로 ≥0.16m 이 필요.
         # (front_x_offset=0일 때 CoM이 지지 삼각형 경계선 위 → 윌리 발생)
-        self.front_x_offset = 0.17   # 앞발: 어깨보다 17cm 전방 (윌리 방지 핵심값)
-        self.rear_x_offset  = 0.0    # 뒷발: 어깨 바로 아래 (기본값 유지)
+        # ">" 자세: 발이 어깨보다 앞에 있어야 허벅지가 앞으로 기울어짐
+        self.front_x_offset = 0.03   # 앞발: 어깨보다 3cm 전방 (실제 다리 길이 기준)
+        self.rear_x_offset  = 0.0   # 뒷발: 어깨 바로 아래
 
-        # 고속 이동 시 IK 범위 초과 방지 (front_x_offset=0.17 기준 최대 도달 한계)
-        self.max_stride = 0.22       # 보폭 상한 (m)
-        
-        # 중립 자세(기립) 기준값: body_height=0.27, L2=L3=0.2, L1=0.08 기준으로 계산된 값
-        # 하드웨어 서보 각도 변환의 기준점으로도 사용됨
-        self.Q2_NEUTRAL = -0.8327  # rad
-        self.Q3_NEUTRAL =  1.6597  # rad
+        # L2+L3=0.17m, h=0.13m → 수평 최대 도달 = sqrt(0.17²-0.13²) = 0.109m
+        self.max_stride = 0.03      # 보폭 상한 (m)
+
+        # 중립 자세(기립) 기준값: body_height=0.13m, L1=0.042, L2=0.075, L3=0.095 실측 계산값
+        self.Q2_NEUTRAL = -0.5408  # rad
+        self.Q3_NEUTRAL =  1.3479  # rad
         self.last_angles = [[0.0, self.Q2_NEUTRAL, self.Q3_NEUTRAL] for _ in range(4)]
 
     def get_stand_posture(self, roll=0.0, pitch=0.0, body_height=None):
