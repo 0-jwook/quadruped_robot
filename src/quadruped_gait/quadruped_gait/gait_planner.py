@@ -2,44 +2,45 @@ import math
 
 class GaitPlanner:
     """
-    Wave Gait + Body Shift 플래너 (SpotMicro 방식 참고).
+    Wave Gait / Trot Gait 플래너.
 
-    한 번에 한 다리씩만 스윙하며(duty_factor=0.75), 스윙 직전에
-    몸통을 지지 삼각형 쪽으로 미리 이동(Body Shift)시켜
-    무게중심이 항상 지지 삼각형 안에 유지되도록 합니다.
-
-    스윙 순서: FR → RR → FL → RL
+    wave: 한 번에 한 다리씩 스윙(duty=0.75), Body Shift로 CoM 유지
+    trot: 대각선 두 다리 동시 스윙(duty=0.50), Body Shift 불필요
     """
     def __init__(self, kinematics,
                  body_height=0.13, step_height=0.035,
-                 max_stride=0.03,  period=1.5):
+                 max_stride=0.03,  period=1.5, gait_type='trot'):
         self.kin = kinematics
 
         self.body_height = body_height
         self.step_height = step_height
         self.period      = period
 
-        self.duty_factor = 0.75
-        # 스윙 순서: RL→FR→RR→FL (대각선 교차, SpotMicro 방식)
-        self.leg_phases  = [0.875, 0.375, 0.125, 0.625]   # [FL, FR, RL, RR]
-
         self.front_x_offset = 0.04
         self.rear_x_offset  = -0.01
         self.max_stride     = max_stride
 
-        # Body Shift: 다리 치수에 비례해 자동 스케일
-        sx_f = 0.20 * self.kin.L2   # 앞다리 전방 이동
-        sx_r = 0.28 * self.kin.L2   # 뒷다리 전방 이동 (후방 편향 보정)
-        sy_f = 0.48 * self.kin.L1   # 앞다리 좌우 이동
-        sy_r = 0.24 * self.kin.L1   # 뒷다리 좌우 이동
-        self._leg_shifts = [
-            (+sx_f, -sy_f),   # FL
-            (+sx_f, +sy_f),   # FR
-            (+sx_r, -sy_r),   # RL
-            (+sx_r, +sy_r),   # RR
-        ]
         self._pre_swing_blend  = 0.10
         self._post_swing_blend = 0.05
+
+        if gait_type == 'trot':
+            self.duty_factor = 0.5
+            # FL+RR 동시 스윙, FR+RL 동시 스윙 (대각선 페어)
+            self.leg_phases  = [0.5, 0.0, 0.0, 0.5]  # [FL, FR, RL, RR]
+            # 대각선 대칭 → CoM 자동 안정, body shift 불필요
+            self._leg_shifts = [(0.0, 0.0)] * 4
+        else:  # wave
+            self.duty_factor = 0.75
+            # 스윙 순서: RL→FR→RR→FL (대각선 교차, SpotMicro 방식)
+            self.leg_phases  = [0.875, 0.375, 0.125, 0.625]  # [FL, FR, RL, RR]
+            sx_f = 0.20 * self.kin.L2
+            sx_r = 0.28 * self.kin.L2
+            sy_f = 0.48 * self.kin.L1
+            sy_r = 0.24 * self.kin.L1
+            self._leg_shifts = [
+                (+sx_f, -sy_f), (+sx_f, +sy_f),
+                (+sx_r, -sy_r), (+sx_r, +sy_r),
+            ]
 
         # 중립 자세 기준값 — IK로 자동 계산 (body_height, 치수에 따라 달라짐)
         res = self.kin.ik(self.front_x_offset, self.kin.L1, -self.body_height, leg_id=0)

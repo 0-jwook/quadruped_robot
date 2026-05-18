@@ -42,9 +42,10 @@ class GaitNode(Node):
         self.declare_parameter('body_height', 0.17)
         self.declare_parameter('step_height', 0.04)
         self.declare_parameter('max_stride',  0.03)
-        self.declare_parameter('period',      1.5)
+        self.declare_parameter('period',      0.8)
         self.declare_parameter('height_min',  0.11)
         self.declare_parameter('height_max',  0.21)
+        self.declare_parameter('gait_type',   'trot')
 
         L1 = self.get_parameter('L1').value
         L2 = self.get_parameter('L2').value
@@ -55,11 +56,13 @@ class GaitNode(Node):
         p  = self.get_parameter('period').value
         self._height_min = self.get_parameter('height_min').value
         self._height_max = self.get_parameter('height_max').value
+        gt = self.get_parameter('gait_type').value
 
         self.kin     = LegKinematics(L1=L1, L2=L2, L3=L3)
         self.planner = GaitPlanner(self.kin,
                                    body_height=bh, step_height=sh,
-                                   max_stride=ms, period=p)
+                                   max_stride=ms, period=p, gait_type=gt)
+        self.get_logger().info(f'Gait type: {gt}')
 
         # ROS2 통신 설정
         self.subscription = self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 10)

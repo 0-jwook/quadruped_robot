@@ -78,10 +78,11 @@ def generate_launch_description():
             'L3': 0.135,
             'body_height': 0.17,
             'step_height': 0.04,
-            'max_stride':  0.03,
-            'period':      1.2,
+            'max_stride':  0.05,
+            'period':      0.8,
             'height_min':  0.11,
             'height_max':  0.21,
+            'gait_type':   'trot',
         }]
     )
 
