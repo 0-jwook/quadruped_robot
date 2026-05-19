@@ -26,7 +26,7 @@ def generate_launch_description():
     )
     baud_arg = DeclareLaunchArgument(
         'baudrate',
-        default_value='115200',
+        default_value='57600',
         description='UART 보드레이트',
     )
 
