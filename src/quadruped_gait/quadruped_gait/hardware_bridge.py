@@ -152,6 +152,7 @@ class HardwareBridge(Node):
         with self._ser_lock:
             try:
                 self.ser.write(packet)
+                self.ser.write(packet)  # 노이즈 대비 중복 전송 (MCU는 동일 명령 2회 수신해도 무해)
             except Exception as e:
                 self.get_logger().error(f'쓰기 오류: {e}')
                 self.ser = None   # 다음 _reconnect_if_needed 에서 재연결
