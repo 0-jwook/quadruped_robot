@@ -67,6 +67,7 @@ def generate_launch_description():
     )
 
     # 실제 로봇 치수와 동일: L1=0.03m, L2=0.115m, L3=0.135m (max_reach=0.25m)
+    # V6 BezierGait 파라미터 (hardware.launch.py 와 동일)
     gait_node = Node(
         package='quadruped_gait',
         executable='gait_node',
@@ -77,12 +78,13 @@ def generate_launch_description():
             'L2': 0.115,
             'L3': 0.135,
             'body_height': 0.17,
-            'step_height': 0.04,
-            'max_stride':  0.05,
-            'period':      0.8,
+            'step_height': 0.03,    # ClearanceHeight
+            'max_stride':  0.03,    # StepLength 상한 (= 0.5 × stride)
+            'period':      0.7,     # 전체 cycle (Tswing = 0.35s)
             'height_min':  0.11,
             'height_max':  0.21,
-            'gait_type':   'trot',
+            'gait_type':   'trot',  # BezierGait 는 trot 만 지원
+            'cmd_vel_hold_time': 30.0,
         }]
     )
 
