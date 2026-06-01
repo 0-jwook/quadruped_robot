@@ -173,28 +173,23 @@ class GaitPlanner:
             stepZ = 0.0
         return stepX, stepY, stepZ
 
-    # ── 회전 처리 (간단화: yaw rate → leg-별 추가 측방 변위) ────────────────
-    def _yaw_step(self, idx, neutral, phase, is_swing, yaw_rate, clearance, penetration):
-        """yaw_rate 가 있을 때 각 다리에 회전 접선 방향 변위 추가."""
+    # ── 회전 처리 ────────────────────────────────────────────────────────────
+    def _yaw_step(self, idx, phase, is_swing, yaw_rate):
+        """
+        yaw_rate 가 있을 때 좌/우 다리에 반대 방향 stride 추가.
+        CCW 회전(yaw>0) → 좌측 다리 전진 / 우측 다리 후진.
+        """
         if abs(yaw_rate) < 1e-6:
             return 0.0, 0.0, 0.0
 
-        # 다리 위치 기준 접선 방향 각 (body 중심 기준 추정)
-        # 우리 시스템은 leg별 어깨 좌표가 IK 내부에 있으므로,
-        # 회전 효과를 단순화: 좌측 다리는 +x, 우측 다리는 -x 방향으로 step
-        # (몸체 yaw CCW → 좌측 발은 뒤로, 우측 발은 앞으로)
-        side = +1.0 if idx in (0, 2) else -1.0   # FL,RL: 좌측 / FR,RR: 우측
-        front = +1.0 if idx in (0, 1) else -1.0  # FL,FR: 앞 / RL,RR: 뒤
-
-        # 회전 스텝 크기 (yaw_rate * Tstance/2 와 유사)
+        side = +1.0 if idx in (0, 2) else -1.0   # FL,RL: +좌측 / FR,RR: -우측
         Lr = yaw_rate * self.Tswing * 0.5
-        # 좌측은 후퇴, 우측은 전진 방향
-        lat = 0.0 if front > 0 else math.pi  # 단순 매핑
-        # 더 단순하게: x 방향만 사용
+        Lr = max(-self.max_stride, min(self.max_stride, Lr))
+
         if is_swing:
-            sx, sy, sz = self._bezier_swing(phase, Lr * side, 0.0, clearance * 0.3)
+            sx, sy, sz = self._bezier_swing(phase, Lr * side, 0.0, self.clearance * 0.5)
         else:
-            sx, sy, sz = self._sine_stance(phase, Lr * side, 0.0, penetration * 0.3)
+            sx, sy, sz = self._sine_stance(phase, Lr * side, 0.0, self.penetration * 0.5)
         return sx, sy, sz
 
     # ── 공개 API ────────────────────────────────────────────────────────────
@@ -228,32 +223,40 @@ class GaitPlanner:
 
     def get_walk_posture(self, vx, vy, omega, t,
                          roll=0.0, pitch=0.0, body_height=None):
-        """보행 자세: BezierGait (vx, vy → StepLength + LateralFraction)."""
+        """
+        보행 자세: BezierGait (cmd_vel → StepLength + LateralFraction + YawRate).
+
+        지원 동작:
+          · 전진:   vx > 0     → 발이 전방으로 step
+          · 후진:   vx < 0     → LateralFraction=π 로 매핑 → 발이 후방으로 step
+          · 측방:   vy ≠ 0     → LateralFraction 으로 매핑 → 발이 좌/우로 step
+          · 회전:   omega ≠ 0  → 좌측 발 전진 / 우측 발 후진 → 제자리 회전
+          · 정지:   모두 ≈ 0   → stand 자세
+        """
         bh = body_height if body_height is not None else self.body_height
 
-        # cmd_vel → Bezier 입력 변환
         v_mag = math.sqrt(vx * vx + vy * vy)
 
-        # StepVelocity: 스트라이드 주기를 결정. 정지(vx≈0) 상태에서도 yaw 만 있으면 cycle 유지
+        # ① 완전 정지 → stand 자세
         if v_mag < 0.005 and abs(omega) < 0.05:
-            # 진짜 정지 — stand 자세로
             return self.get_stand_posture(roll, pitch, bh)
 
-        # StepLength: 속도에 비례, max_stride 로 클램프
-        # Tstance = 2L/v 이므로 L = v * Tstance / 2. Tstance ≈ Tswing 가정.
-        L_raw = v_mag * self.Tswing  # 가정: Tstance = Tswing → L = v * T
-        L = min(self.max_stride, L_raw)
-
-        # LateralFraction: 진행 방향 각도
-        if v_mag > 1e-6:
+        # ② cmd_vel → BezierGait 입력 변환
+        if v_mag >= 0.005:
+            # 전진/후진/측방 모드 (회전이 같이 있을 수도)
+            # 후진은 LateralFraction=π 로 처리되어 STEP*cos(π) = -STEP 효과
             lat_frac = math.atan2(vy, vx)
+            L_raw = v_mag * self.Tswing      # 한 스윙에서 발이 ±L 거리
+            L = min(self.max_stride, L_raw)
+            StepVelocity = max(v_mag, 0.05)
         else:
+            # 제자리 회전 전용 모드 (omega 만 있음)
+            # 메인 stride 는 거의 0, yaw_step 에서만 회전 stride 추가
             lat_frac = 0.0
+            L = self.max_stride * 0.2        # 작은 가상 stride (phase 진행용)
+            StepVelocity = max(abs(omega) * self.kin.L1 * 2.0, 0.05)
 
-        StepVelocity = max(v_mag, 0.05)
-        YawRate = omega
-
-        # Tstance 계산 (Bezier 원본 로직)
+        # ③ Tstance 계산 (= 2L/v, Tswing 의 1.3 배까지 cap)
         if L > 1e-6:
             Tstance = 2.0 * L / StepVelocity
         else:
@@ -263,16 +266,14 @@ class GaitPlanner:
             L = 0.0
         elif Tstance > 1.3 * self.Tswing:
             Tstance = 1.3 * self.Tswing
-
         Tstride = Tstance + self.Tswing
 
-        # touchdown 신호 (간단화: 항상 가능)
+        # ④ 위상 증가
         if Tstance > self.dt:
             self.TD = True
-
-        # 위상 증가
         self._increment(Tstride)
 
+        # ⑤ 각 다리에 대해 swing/stance 궤적 + yaw 회전 효과 합성 + IK
         neutrals = self._neutral_feet(bh)
         kp_r, kp_p = 0.5, 1.0
         refs = [(0.2, 0.1), (0.2, -0.1), (-0.2, 0.1), (-0.2, -0.1)]
@@ -281,6 +282,7 @@ class GaitPlanner:
         for i, (lx, ly) in enumerate(refs):
             phase, is_swing = self._get_phase(i, Tstance)
 
+            # 메인 stride (전진/후진/측방)
             if Tstance > 0.0:
                 if is_swing:
                     rx, ry, rz = self._bezier_swing(phase, L, lat_frac, self.clearance)
@@ -289,11 +291,10 @@ class GaitPlanner:
             else:
                 rx, ry, rz = 0.0, 0.0, 0.0
 
-            # yaw 회전 효과 추가
-            yx, yy, yz = self._yaw_step(i, neutrals[i], phase, is_swing,
-                                        YawRate, self.clearance, self.penetration)
+            # 회전 stride (좌/우 다리에 반대 방향 추가)
+            yx, yy, yz = self._yaw_step(i, phase, is_swing, omega)
 
-            # IMU 보정
+            # IMU 자세 보정 (roll/pitch)
             dz = -(lx * math.sin(pitch) * kp_p - ly * math.sin(roll) * kp_r)
 
             nx, ny, nz = neutrals[i]
