@@ -43,7 +43,7 @@ def generate_launch_description():
             # SpotMicroAI BezierGait 파라미터
             'step_height': 0.03,    # ClearanceHeight: 스윙 시 최대 발 들기 높이
             'max_stride':  0.03,    # StepLength 상한 (= 0.5 × stride length)
-            'period':      0.4,     # 전체 cycle (Tswing = period/2 = 0.2s)
+            'period':      0.7,     # 전체 cycle (Tswing = period/2 = 0.35s) - 보행 속도 완화
             'height_min':  0.11,
             'height_max':  0.21,
             'gait_type':   'trot',  # BezierGait 는 trot 만 지원
