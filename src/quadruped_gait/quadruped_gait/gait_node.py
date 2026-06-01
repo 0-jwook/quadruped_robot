@@ -5,6 +5,7 @@ from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from sensor_msgs.msg import Imu
 from std_msgs.msg import Float32
 import math
+import time
 
 # 분리된 파일에서 클래스 임포트
 from .kinematics import LegKinematics
@@ -46,6 +47,7 @@ class GaitNode(Node):
         self.declare_parameter('height_min',  0.11)
         self.declare_parameter('height_max',  0.21)
         self.declare_parameter('gait_type',   'trot')
+        self.declare_parameter('cmd_vel_hold_time', 30.0)
 
         L1 = self.get_parameter('L1').value
         L2 = self.get_parameter('L2').value
@@ -57,6 +59,7 @@ class GaitNode(Node):
         self._height_min = self.get_parameter('height_min').value
         self._height_max = self.get_parameter('height_max').value
         gt = self.get_parameter('gait_type').value
+        self._cmd_vel_hold_time = self.get_parameter('cmd_vel_hold_time').value
 
         self.kin     = LegKinematics(L1=L1, L2=L2, L3=L3)
         self.planner = GaitPlanner(self.kin,
@@ -73,7 +76,11 @@ class GaitNode(Node):
         self.dt = 0.02
         self.timer = self.create_timer(self.dt, self.timer_callback)
 
+        # SpotMicro 방식: cmd_vel을 한 번 받으면 Walk 모드 진입 → phase cycle 계속 돔
+        # cmd_vel=0이어도 hold_time 안에는 walk_posture 호출 → 제자리 걷기
         self.cmd_vx, self.cmd_vy, self.cmd_omega = 0.0, 0.0, 0.0
+        self._last_cmd_time = 0.0
+        self._walk_active = False    # Walk 상태 플래그 (SpotMicro FSM 의 Walk state 진입 여부)
         self.roll, self.pitch, self.yaw = 0.0, 0.0, 0.0
         self.init_t = None
 
@@ -91,10 +98,14 @@ class GaitNode(Node):
         self.get_logger().info('Quadruped Gait Node with IMU feedback started.')
 
     def cmd_vel_callback(self, msg):
-        """속도 명령 수신"""
+        """속도 명령 수신 — SpotMicro Walk 모드 진입 트리거"""
         self.cmd_vx = msg.linear.x
         self.cmd_vy = msg.linear.y
         self.cmd_omega = msg.angular.z
+        self._last_cmd_time = time.monotonic()
+        # 어떤 cmd_vel 메시지든 한 번 받으면 Walk 모드 진입.
+        # (값이 0이어도 walk_posture를 계속 호출해서 SpotMicro 영상처럼 제자리 걷기)
+        self._walk_active = True
 
     def imu_callback(self, msg):
         """IMU 데이터 수신 (자세 제어를 위한 Roll, Pitch 추출)"""
@@ -120,15 +131,19 @@ class GaitNode(Node):
         if abs(diff) > 0.001:
             self.current_body_height += math.copysign(min(self.height_rate, abs(diff)), diff)
 
-        # 1. 속도 명령 유무에 따른 자세 결정 (데드존 적용)
-        is_moving = abs(self.cmd_vx) > 0.01 or abs(self.cmd_vy) > 0.01 or abs(self.cmd_omega) > 0.01
+        # SpotMicro FSM 모사:
+        #   Walk 상태: cmd_vel 수신 → hold_time 내 → phase cycle 계속 (값 0이면 제자리 걷기)
+        #   Stand 상태: hold_time 초과 시 자동 복귀
+        since_last = time.monotonic() - self._last_cmd_time
+        walking = self._walk_active and (since_last < self._cmd_vel_hold_time)
 
-        if not is_moving:
-            joint_angles = self.planner.get_stand_posture(
-                self.roll, self.pitch, self.current_body_height)
-        else:
+        if walking:
             joint_angles = self.planner.get_walk_posture(
                 self.cmd_vx, self.cmd_vy, self.cmd_omega, elapsed,
+                self.roll, self.pitch, self.current_body_height)
+        else:
+            self._walk_active = False
+            joint_angles = self.planner.get_stand_posture(
                 self.roll, self.pitch, self.current_body_height)
 
         # 2. 메시지 생성 및 발행
