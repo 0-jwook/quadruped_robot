@@ -235,37 +235,44 @@ class GaitPlanner:
         """
         bh = body_height if body_height is not None else self.body_height
 
+        # ① 안전 clamp: 우리 작은 로봇 크기 (L2+L3=0.25m) 에 맞춰
+        #    teleop_twist_keyboard 기본 0.5 m/s 가 너무 빠르기 때문.
+        MAX_LIN = 0.15   # m/s
+        MAX_ANG = 0.6    # rad/s
+        vx    = max(-MAX_LIN, min(MAX_LIN, vx))
+        vy    = max(-MAX_LIN, min(MAX_LIN, vy))
+        omega = max(-MAX_ANG, min(MAX_ANG, omega))
+
         v_mag = math.sqrt(vx * vx + vy * vy)
 
-        # ① 완전 정지 → stand 자세
+        # ② 완전 정지 → stand 자세
         if v_mag < 0.005 and abs(omega) < 0.05:
             return self.get_stand_posture(roll, pitch, bh)
 
-        # ② cmd_vel → BezierGait 입력 변환
+        # ③ cmd_vel → BezierGait 입력 변환
         if v_mag >= 0.005:
-            # 전진/후진/측방 모드 (회전이 같이 있을 수도)
-            # 후진은 LateralFraction=π 로 처리되어 STEP*cos(π) = -STEP 효과
+            # 전진/후진/측방 모드
             lat_frac = math.atan2(vy, vx)
-            L_raw = v_mag * self.Tswing      # 한 스윙에서 발이 ±L 거리
+            L_raw = v_mag * self.Tswing
             L = min(self.max_stride, L_raw)
             StepVelocity = max(v_mag, 0.05)
         else:
             # 제자리 회전 전용 모드 (omega 만 있음)
-            # 메인 stride 는 거의 0, yaw_step 에서만 회전 stride 추가
             lat_frac = 0.0
-            L = self.max_stride * 0.2        # 작은 가상 stride (phase 진행용)
+            L = self.max_stride * 0.2
             StepVelocity = max(abs(omega) * self.kin.L1 * 2.0, 0.05)
 
-        # ③ Tstance 계산 (= 2L/v, Tswing 의 1.3 배까지 cap)
+        # ④ Tstance 계산
+        #    핵심: 작은 v 에서는 Tstance 가 길어지고, 큰 v 에서는 짧아지는데
+        #    너무 짧아지면 발만 후다닥 움직이는 효과 → Tswing × 0.7 을 최소값으로 고정.
+        #    너무 길어져도 phase 가 시각적으로 어색 → Tswing × 1.3 을 최대값으로 cap.
         if L > 1e-6:
             Tstance = 2.0 * L / StepVelocity
+            Tstance = max(self.Tswing * 0.7,
+                          min(self.Tswing * 1.3, Tstance))
         else:
             Tstance = 0.0
-        if Tstance < self.dt:
-            Tstance = 0.0
             L = 0.0
-        elif Tstance > 1.3 * self.Tswing:
-            Tstance = 1.3 * self.Tswing
         Tstride = Tstance + self.Tswing
 
         # ④ 위상 증가
