@@ -79,8 +79,8 @@ def generate_launch_description():
             'L3': 0.135,
             'body_height': 0.17,
             'step_height': 0.03,    # ClearanceHeight
-            'max_stride':  0.03,    # StepLength 상한 (= 0.5 × stride)
-            'period':      0.7,     # 전체 cycle (Tswing = 0.35s)
+            'max_stride':  0.025,   # StepLength 상한 (보폭 작게 → 차분한 속도)
+            'period':      1.0,     # 전체 cycle (Tswing = 0.5s)
             'height_min':  0.11,
             'height_max':  0.21,
             'gait_type':   'trot',  # BezierGait 는 trot 만 지원
