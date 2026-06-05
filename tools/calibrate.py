@@ -59,15 +59,22 @@ HOME = [
 ]
 
 
-# ── 시리얼 프로토콜 (stm32_bridge.py 와 동일) ─────────────────────────────
+# ── 시리얼 프로토콜 (hardware_bridge.py 와 동일, MCU CRC8 검증) ──────────
+def _crc8(data: bytes) -> int:
+    """CRC-8 polynomial 0x07, init 0x00 — MCU CRC8Update() 와 동일"""
+    crc = 0x00
+    for byte in data:
+        crc ^= byte
+        for _ in range(8):
+            crc = ((crc << 1) ^ 0x07) & 0xFF if (crc & 0x80) else (crc << 1) & 0xFF
+    return crc
+
+
 def make_packet(angles_deg):
-    """[0xAA, 0x55, ID=0x03, LEN=48, 12×float32, checksum]"""
-    header = b'\xaa\x55'
-    packet_id = 0x03
-    length = 48
+    """[0xAA, 0x55, ID=0x03, LEN=48, 12×float32, CRC8(ID+LEN+payload)]"""
+    meta    = bytes([0x03, 48])
     payload = struct.pack('<12f', *angles_deg)
-    checksum = (packet_id + length + sum(payload)) & 0xFF
-    return header + bytes([packet_id, length]) + payload + bytes([checksum])
+    return b'\xaa\x55' + meta + payload + bytes([_crc8(meta + payload)])
 
 
 # ── 터미널 단일 키 입력 ────────────────────────────────────────────────────
