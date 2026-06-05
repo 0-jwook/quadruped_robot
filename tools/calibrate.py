@@ -23,12 +23,12 @@ ROS 노드(hardware.launch.py)를 띄우지 않은 상태에서 사용하세요.
     q           : 종료 (종료 시도 자동 출력)
 
 권장 캘리브 절차:
-    1. 로봇을 평탄면 위에 + 배터리 충전 + 부유물 없음 확인
+    1. 로봇을 옆으로 눕히거나 들어올린 상태 (다리 쫙 펴도 안전한 자세)
     2. ROS 노드(hardware.launch.py) 가 켜져 있으면 종료
-    3. 스크립트 실행 → 자동으로 STAND 자세 (실제 보행 자세) 로 이동
-    4. 다리 4개가 좌우/전후 대칭으로 살짝 굽힌 자세여야 함
-    5. 비대칭이 보이면 어긋난 관절을 +/- 키로 조정
-    6. 4개 다리 모양이 좌우 대칭, 전후 대칭이 되면 OK
+    3. 스크립트 실행 → 자동으로 HOME 자세 (다리 쫙 편 일자 자세) 로 이동
+    4. 다리 4개가 모두 곧게 수직 아래로 펴진 자세여야 함
+    5. 좌/우 또는 전/후 어긋남이 보이면 어긋난 관절을 +/- 키로 조정
+    6. 4개 다리가 모두 곧게 + 좌우 평행 + 전후 평행이 되면 OK
     7. 'p' 키로 trim 출력 → hardware_bridge.py 의 SERVO_TRIMS 에 반영
 """
 
@@ -50,51 +50,16 @@ except ImportError:
 LEG_NAMES = ['FL', 'FR', 'RL', 'RR']
 JOINT_NAMES = ['hip', 'thigh', 'calf']
 
-
-def _compute_stand_pose(body_height: float = 0.17):
-    """
-    실제 보행에 사용되는 stand 자세(다리 약간 굽혀 무릎 살짝 굽힌 자세)에
-    해당하는 서보 각도를 계산.
-    SERVO_TRIMS=0 인 raw 서보 각도를 반환 — 캘리브는 이 기준에서 ±0 이 된다.
-    """
-    import math as _m
-    # quadruped_gait 패키지를 install 경로에서 import
-    candidates = [
-        '/home/jaewook/Quardruped/install/quadruped_gait/lib/python3.10/site-packages',
-        '/home/jaewook/Quardruped/install/quadruped_gait/lib/python3.8/site-packages',
-        '/home/jaewook/Quardruped/install/quadruped_gait/lib/python3.12/site-packages',
-        '/home/jaewook/Quardruped/src/quadruped_gait',
-    ]
-    for p in candidates:
-        if p not in sys.path:
-            sys.path.insert(0, p)
-
-    from quadruped_gait.kinematics import LegKinematics
-    from quadruped_gait.gait_planner import GaitPlanner
-
-    kin = LegKinematics(0.030, 0.115, 0.135)
-    gp = GaitPlanner(kin, body_height=body_height,
-                     step_height=0.03, max_stride=0.025, period=1.0)
-    angles_rad = gp.get_stand_posture(roll=0.0, pitch=0.0, body_height=body_height)
-
-    out = []
-    for i, leg in enumerate(LEG_NAMES):
-        q1, q2, q3 = angles_rad[i*3:i*3+3]
-        is_right = leg in ('FR', 'RR')
-        if not is_right:
-            shoulder = 90.0 + _m.degrees(q1)
-            thigh    =  0.0 - _m.degrees(q2)
-            calf     = 180.0 - _m.degrees(q3)
-        else:
-            shoulder =  90.0 + _m.degrees(q1)
-            thigh    = 180.0 + _m.degrees(q2)
-            calf     =   0.0 + _m.degrees(q3)
-        out.extend([shoulder, thigh, calf])
-    return out
-
-
-# 실행 시점에 stand 자세를 계산 (보행 자세에서 캘리브)
-HOME = _compute_stand_pose(body_height=0.17)
+# 다리를 쫙 펴서 수직 아래로 향한 자세 (완벽 좌우 대칭, SERVO_TRIMS=0 기준).
+# 이 자세에서 비대칭이 시각적으로 가장 잘 드러난다 (다리가 일자라 작은 어긋남도 눈에 띔).
+# FL/RL(좌측): thigh=0 → 수직 아래, calf=180 → 직선
+# FR/RR(우측): thigh=180 → 수직 아래(좌측의 거울), calf=0 → 직선(좌측의 거울)
+HOME = [
+    90.0,   0.0, 180.0,   # FL
+    90.0, 180.0,   0.0,   # FR
+    90.0,   0.0, 180.0,   # RL
+    90.0, 180.0,   0.0,   # RR
+]
 
 
 # ── 시리얼 프로토콜 (hardware_bridge.py 와 동일, MCU CRC8 검증) ──────────
@@ -135,7 +100,7 @@ def print_state(angles, leg_idx, joint_idx):
     home = HOME[leg_idx * 3 + joint_idx]
     trim = cur - home
     msg = (f"\r[ {LEG_NAMES[leg_idx]}.{JOINT_NAMES[joint_idx]} ] "
-           f"명령={cur:6.1f}°   STAND={home:6.1f}°   trim={trim:+6.1f}°   ")
+           f"명령={cur:6.1f}°   HOME={home:6.1f}°   trim={trim:+6.1f}°   ")
     sys.stdout.write(msg)
     sys.stdout.flush()
 
@@ -176,7 +141,7 @@ def main():
         ser.write(pkt)
         time.sleep(0.05)
 
-    print("\n초기 자세(STAND, 실제 보행 자세) 적용 완료. 키 입력으로 조정 시작.\n")
+    print("\n초기 자세(HOME, 다리 쫙 편 자세) 적용 완료. 키 입력으로 조정 시작.\n")
     print_state(angles, leg_idx, joint_idx)
 
     last_send = time.time()
