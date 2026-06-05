@@ -41,76 +41,61 @@ class STM32Bridge(Node):
         self.read_timer = self.create_timer(0.01, self.read_from_serial)
 
     def joint_callback(self, msg):
-        """Send joint angles to STM32"""
+        """Send joint angles to STM32 using Binary Protocol with Checksum"""
         if self.ser and self.ser.is_open and len(msg.points) > 0:
-            angles = msg.points[0].positions # List of 12 floats
+            # angles: List of 12 floats (radiants to degrees conversion if needed)
+            # ROS typically uses radians, but our STM32 expects degrees (0-180)
+            angles_rad = msg.points[0].positions
+            angles_deg = [math.degrees(a) + 90.0 for a in angles_rad]
             
-            # Packet: [Start(0xAA, 0x55)] + [12 floats (48 bytes)] + [End(0x0D, 0x0A)]
-            header = struct.pack('BB', 0xAA, 0x55)
-            data = struct.pack('12f', *angles)
-            footer = struct.pack('BB', 0x0D, 0x0A)
+            # Protocol: [0xAA, 0x55] [ID=0x03] [LEN=48] [Payload(48)] [Checksum]
+            header = b'\xaa\x55'
+            packet_id = 0x03
+            length = 48
+            
+            # Pack 12 floats (48 bytes)
+            payload = struct.pack('<12f', *angles_deg)
+            
+            # Calculate Checksum: sum of (ID + LEN + Payload bytes)
+            checksum = (packet_id + length + sum(payload)) & 0xFF
+            
+            packet = header + bytes([packet_id, length]) + payload + bytes([checksum])
             
             try:
-                self.ser.write(header + data + footer)
+                self.ser.write(packet)
             except Exception as e:
                 self.get_logger().error(f"Write error: {e}")
 
     def read_from_serial(self):
-        """Read IMU data from STM32"""
+        """Read ASCII telemetry from STM32 (IMU:roll,pitch,yaw)"""
         if not self.ser or not self.ser.is_open:
             return
 
-        # Expected packet size: Header(2) + IMU(40) + Footer(2) = 44 bytes
-        if self.ser.in_waiting >= 44:
-            # Look for header 0x55 0xAA
-            if self.ser.read(1) == b'\x55':
-                if self.ser.read(1) == b'\xAA':
-                    payload = self.ser.read(40)
-                    footer = self.ser.read(2)
-                    
-                    if footer == b'\x0D\x0A':
-                        try:
-                            # 10 floats: Quat(x,y,z,w), AngVel(x,y,z), Accel(x,y,z)
-                            imu_data = struct.unpack('10f', payload)
-                            
-                            msg = Imu()
-                            msg.header.stamp = self.get_clock().now().to_msg()
-                            msg.header.frame_id = "imu_link"
-                            
-                            # Orientation
-                            msg.orientation.x = imu_data[0]
-                            msg.orientation.y = imu_data[1]
-                            msg.orientation.z = imu_data[2]
-                            msg.orientation.w = imu_data[3]
-                            
-                            # Angular Velocity
-                            msg.angular_velocity.x = imu_data[4]
-                            msg.angular_velocity.y = imu_data[5]
-                            msg.angular_velocity.z = imu_data[6]
-                            
-                            # Linear Acceleration
-                            msg.linear_acceleration.x = imu_data[7]
-                            msg.linear_acceleration.y = imu_data[8]
-                            msg.linear_acceleration.z = imu_data[9]
-                            
-                            self.imu_pub.publish(msg)
-                        except Exception as e:
-                            self.get_logger().error(f"Unpack error: {e}")
-                    else:
-                        self.get_logger().warn("Invalid footer received")
+        try:
+            if self.ser.in_waiting > 0:
+                line = self.ser.readline().decode('ascii', errors='ignore').strip()
+                if line.startswith('IMU:'):
+                    # IMU:roll,pitch,yaw
+                    parts = line[4:].split(',')
+                    if len(parts) == 3:
+                        r, p, y = map(float, parts)
+                        msg = Imu()
+                        msg.header.stamp = self.get_clock().now().to_msg()
+                        msg.header.frame_id = "imu_link"
+                        # Simple RPY to Quat conversion if needed, 
+                        # for now just publishing raw orientation placeholder or skip
+                        self.get_logger().debug(f"IMU: R={r}, P={p}, Y={y}")
+                elif line.startswith('HB:'):
+                    self.get_logger().debug(f"Heartbeat: {line}")
+        except Exception as e:
+            self.get_logger().error(f"Read error: {e}")
 
 def main(args=None):
     rclpy.init(args=args)
     node = STM32Bridge()
-    try:
-        rclpy.spin(node)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        if node.ser:
-            node.ser.close()
-        node.destroy_node()
-        rclpy.shutdown()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

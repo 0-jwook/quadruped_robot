@@ -82,6 +82,7 @@ class HardwareBridge(Node):
         self._ser_lock = threading.Lock()
         self.ser = None
         self._last_reconnect = 0.0
+        self._connect_time = 0.0
 
         self._connect()
 
@@ -112,6 +113,8 @@ class HardwareBridge(Node):
                     pass
             try:
                 self.ser = serial.Serial(self._port, self._baud, timeout=1.0)
+                self.ser.reset_input_buffer()  # 연결 전 OS에 쌓인 구 메시지 버림
+                self._connect_time = time.monotonic()
                 self.get_logger().info(f'STM32 연결: {self._port} @ {self._baud} bps')
                 return True
             except Exception as e:
@@ -152,7 +155,6 @@ class HardwareBridge(Node):
         with self._ser_lock:
             try:
                 self.ser.write(packet)
-                self.ser.write(packet)  # 노이즈 대비 중복 전송 (MCU는 동일 명령 2회 수신해도 무해)
             except Exception as e:
                 self.get_logger().error(f'쓰기 오류: {e}')
                 self.ser = None   # 다음 _reconnect_if_needed 에서 재연결
@@ -220,17 +222,32 @@ class HardwareBridge(Node):
         self.imu_pub.publish(msg)
 
     def _handle_heartbeat(self, line: str):
-        # 형식: HB:<tick>,CRC:<n>,ERR:<n>
+        # 형식: HB:<tick>,CRC:<n>,ERR:<n>,PKT:<n>,WDG:<n>,TO:<n>
         try:
-            if 'CRC:' in line:
-                crc_part = line.split('CRC:')[1].split(',')[0]
-                err_part = line.split('ERR:')[1] if 'ERR:' in line else '0'
-                crc_n = int(crc_part)
-                err_n = int(err_part)
-                if crc_n > 0 or err_n > 0:
-                    self.get_logger().warn(
-                        f'MCU 통신 오류 — CRC실패: {crc_n}, UART오류: {err_n}'
-                    )
+            def _field(key):
+                if key + ':' not in line:
+                    return 0
+                return int(line.split(key + ':')[1].split(',')[0])
+
+            crc_n = _field('CRC')
+            err_n = _field('ERR')
+            pkt_n = _field('PKT')
+            wdg_n = _field('WDG')
+            to_n  = _field('TO')
+
+            # 항상 출력 (MCU 상태 실시간 확인)
+            self.get_logger().info(
+                f'MCU HB — PKT:{pkt_n} CRC:{crc_n} ERR:{err_n} WDG:{wdg_n} TO:{to_n}'
+            )
+
+            # 연결 직후 3초는 초기화 기간 — PKT:0 이 정상
+            since_connect = time.monotonic() - self._connect_time
+            if pkt_n == 0 and since_connect > 3.0:
+                self.get_logger().warn('MCU가 유효 패킷을 0개 받음 — UART 수신 불량')
+            if wdg_n > 0:
+                self.get_logger().warn(f'UART 워치독 발동 {wdg_n}회 — UART가 죽었다 복구됨')
+            if to_n == 1:
+                self.get_logger().warn('MCU 명령 타임아웃 — 서보 홀드 상태')
         except Exception:
             pass
 
