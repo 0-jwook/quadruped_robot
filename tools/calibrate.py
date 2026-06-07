@@ -50,16 +50,50 @@ except ImportError:
 LEG_NAMES = ['FL', 'FR', 'RL', 'RR']
 JOINT_NAMES = ['hip', 'thigh', 'calf']
 
-# 다리를 쫙 펴서 수직 아래로 향한 자세 (완벽 좌우 대칭, SERVO_TRIMS=0 기준).
-# 이 자세에서 비대칭이 시각적으로 가장 잘 드러난다 (다리가 일자라 작은 어긋남도 눈에 띔).
-# FL/RL(좌측): thigh=0 → 수직 아래, calf=180 → 직선
-# FR/RR(우측): thigh=180 → 수직 아래(좌측의 거울), calf=0 → 직선(좌측의 거울)
-HOME = [
+# raw HOME (다리 쫙 편 좌우 대칭 자세, SERVO_TRIMS=0 기준)
+# FL/RL: thigh=0 (수직 아래), calf=180 (직선)
+# FR/RR: thigh=180 (좌측 거울), calf=0 (좌측 거울)
+RAW_HOME = [
     90.0,   0.0, 180.0,   # FL
     90.0, 180.0,   0.0,   # FR
     90.0,   0.0, 180.0,   # RL
     90.0, 180.0,   0.0,   # RR
 ]
+
+
+def _load_servo_trims_from_file(path):
+    """hardware_bridge.py 의 SERVO_TRIMS 딕셔너리를 파싱해서 가져옴.
+    이미 캘리브된 trim 위에서 추가 미세조정 하기 위함."""
+    import re
+    try:
+        text = open(path).read()
+    except Exception:
+        return None
+    m = re.search(r"SERVO_TRIMS\s*=\s*\{(.*?)\}", text, re.DOTALL)
+    if not m:
+        return None
+    body = m.group(1)
+    result = {}
+    pat = r"'(\w+)'\s*:\s*\(\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*\)"
+    for leg_match in re.finditer(pat, body):
+        leg = leg_match.group(1)
+        result[leg] = tuple(float(leg_match.group(i)) for i in range(2, 5))
+    return result if result else None
+
+
+HARDWARE_BRIDGE_PATH = '/home/jaewook/Quardruped/src/quadruped_gait/quadruped_gait/hardware_bridge.py'
+INITIAL_TRIMS = _load_servo_trims_from_file(HARDWARE_BRIDGE_PATH) or {
+    'FL': (0.0, 0.0, 0.0),
+    'FR': (0.0, 0.0, 0.0),
+    'RL': (0.0, 0.0, 0.0),
+    'RR': (0.0, 0.0, 0.0),
+}
+
+# 캘리브 시작 자세 = raw HOME + 현재 SERVO_TRIMS (이미 보정된 자세에서 시작)
+HOME = list(RAW_HOME)
+for _i, _leg in enumerate(LEG_NAMES):
+    for _j in range(3):
+        HOME[_i * 3 + _j] += INITIAL_TRIMS[_leg][_j]
 
 
 # ── 시리얼 프로토콜 (hardware_bridge.py 와 동일, MCU CRC8 검증) ──────────
@@ -97,10 +131,13 @@ def getch_non_blocking(timeout=0.05):
 # ── 출력 ────────────────────────────────────────────────────────────────────
 def print_state(angles, leg_idx, joint_idx):
     cur = angles[leg_idx * 3 + joint_idx]
-    home = HOME[leg_idx * 3 + joint_idx]
-    trim = cur - home
+    raw = RAW_HOME[leg_idx * 3 + joint_idx]
+    initial = HOME[leg_idx * 3 + joint_idx]      # raw + initial_trim
+    total_trim = cur - raw                       # 누적 trim (현재 + 사용자 추가)
+    delta = cur - initial                        # 이번 세션에서 추가된 양
     msg = (f"\r[ {LEG_NAMES[leg_idx]}.{JOINT_NAMES[joint_idx]} ] "
-           f"명령={cur:6.1f}°   HOME={home:6.1f}°   trim={trim:+6.1f}°   ")
+           f"명령={cur:6.1f}°   trim={total_trim:+6.1f}°  "
+           f"(Δ {delta:+5.1f}°)   ")
     sys.stdout.write(msg)
     sys.stdout.flush()
 
@@ -109,11 +146,12 @@ def print_trims(angles):
     sys.stdout.write("\n\n")
     sys.stdout.write("=" * 60 + "\n")
     sys.stdout.write("hardware_bridge.py 의 SERVO_TRIMS 에 복사하세요:\n")
+    sys.stdout.write("(누적값 — 기존 trim + 이번 추가 조정)\n")
     sys.stdout.write("=" * 60 + "\n")
     sys.stdout.write("SERVO_TRIMS = {\n")
     sys.stdout.write("    #        shoulder   thigh    calf\n")
     for i, leg in enumerate(LEG_NAMES):
-        trims = [angles[i * 3 + j] - HOME[i * 3 + j] for j in range(3)]
+        trims = [angles[i * 3 + j] - RAW_HOME[i * 3 + j] for j in range(3)]
         sys.stdout.write(f"    '{leg}': ({trims[0]:8.1f}, {trims[1]:7.1f}, {trims[2]:7.1f}),\n")
     sys.stdout.write("}\n")
     sys.stdout.write("=" * 60 + "\n\n")
@@ -141,7 +179,11 @@ def main():
         ser.write(pkt)
         time.sleep(0.05)
 
-    print("\n초기 자세(HOME, 다리 쫙 편 자세) 적용 완료. 키 입력으로 조정 시작.\n")
+    print("\n현재 SERVO_TRIMS 적용 상태에서 시작:")
+    for leg in LEG_NAMES:
+        h, t, c = INITIAL_TRIMS[leg]
+        print(f"  {leg}: hip={h:+5.1f}  thigh={t:+5.1f}  calf={c:+5.1f}")
+    print("\n초기 자세(HOME + trim 적용) 도달. 추가 미세 조정 시작.\n")
     print_state(angles, leg_idx, joint_idx)
 
     last_send = time.time()
