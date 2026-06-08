@@ -174,10 +174,13 @@ class GaitPlanner:
         return stepX, stepY, stepZ
 
     # ── 회전 처리 ────────────────────────────────────────────────────────────
-    def _yaw_step(self, idx, phase, is_swing, yaw_rate):
+    def _yaw_step(self, idx, phase, is_swing, yaw_rate, clearance_scale=0.7):
         """
         yaw_rate 가 있을 때 좌/우 다리에 반대 방향 stride 추가.
         CCW 회전(yaw>0) → 좌측 다리 전진 / 우측 다리 후진.
+
+        clearance_scale: yaw_step 의 발 들기 높이를 메인 clearance 의 몇 배로 할지.
+                         제자리 회전(메인 L=0)일 때 0.7 정도면 적당히 발 들 수 있음.
         """
         if abs(yaw_rate) < 1e-6:
             return 0.0, 0.0, 0.0
@@ -186,8 +189,9 @@ class GaitPlanner:
         Lr = yaw_rate * self.Tswing * 0.5
         Lr = max(-self.max_stride, min(self.max_stride, Lr))
 
+        c = self.clearance * clearance_scale
         if is_swing:
-            sx, sy, sz = self._bezier_swing(phase, Lr * side, 0.0, self.clearance * 0.5)
+            sx, sy, sz = self._bezier_swing(phase, Lr * side, 0.0, c)
         else:
             sx, sy, sz = self._sine_stance(phase, Lr * side, 0.0, self.penetration * 0.5)
         return sx, sy, sz
@@ -250,29 +254,30 @@ class GaitPlanner:
             return self.get_stand_posture(roll, pitch, bh)
 
         # ③ cmd_vel → BezierGait 입력 변환
-        if v_mag >= 0.005:
-            # 전진/후진/측방 모드
+        pure_rotation = (v_mag < 0.005)
+        if not pure_rotation:
+            # 전진/후진/측방 모드 (회전이 같이 있을 수도)
             lat_frac = math.atan2(vy, vx)
             L_raw = v_mag * self.Tswing
             L = min(self.max_stride, L_raw)
             StepVelocity = max(v_mag, 0.05)
         else:
-            # 제자리 회전 전용 모드 (omega 만 있음)
+            # 제자리 회전 전용 모드: 메인 stride 는 0 (전후 step 없음, 발 들기도 메인 측은 0)
+            # phase 진행은 가상 Tstance 로. yaw_step 만 발 움직임 담당.
             lat_frac = 0.0
-            L = self.max_stride * 0.2
+            L = 0.0
             StepVelocity = max(abs(omega) * self.kin.L1 * 2.0, 0.05)
 
         # ④ Tstance 계산
-        #    핵심: 작은 v 에서는 Tstance 가 길어지고, 큰 v 에서는 짧아지는데
-        #    너무 짧아지면 발만 후다닥 움직이는 효과 → Tswing × 0.7 을 최소값으로 고정.
-        #    너무 길어져도 phase 가 시각적으로 어색 → Tswing × 1.3 을 최대값으로 cap.
         if L > 1e-6:
             Tstance = 2.0 * L / StepVelocity
             Tstance = max(self.Tswing * 0.7,
                           min(self.Tswing * 1.3, Tstance))
+        elif pure_rotation:
+            # L=0 이지만 phase 가 돌아가야 yaw_step 이 작동함
+            Tstance = self.Tswing
         else:
             Tstance = 0.0
-            L = 0.0
         Tstride = Tstance + self.Tswing
 
         # ④ 위상 증가
@@ -289,8 +294,8 @@ class GaitPlanner:
         for i, (lx, ly) in enumerate(refs):
             phase, is_swing = self._get_phase(i, Tstance)
 
-            # 메인 stride (전진/후진/측방)
-            if Tstance > 0.0:
+            # 메인 stride (전진/후진/측방). L=0 (제자리 회전 모드) 면 발 들기도 0.
+            if Tstance > 0.0 and L > 1e-6:
                 if is_swing:
                     rx, ry, rz = self._bezier_swing(phase, L, lat_frac, self.clearance)
                 else:
