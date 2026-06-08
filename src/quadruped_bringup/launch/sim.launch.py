@@ -86,7 +86,6 @@ def generate_launch_description():
             'gait_type':   'trot',   # 대각선 쌍 동시 swing
             'cmd_vel_hold_time': 30.0,
             'pitch_offset': 0.0,    # rad. 보정 없음
-            'forward_yaw_correction': -0.05,  # 전진 시 자동 우측 회전 (좌측 휨 상쇄)
         }]
     )
 
