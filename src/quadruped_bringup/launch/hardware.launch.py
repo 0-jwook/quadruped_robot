@@ -48,7 +48,7 @@ def generate_launch_description():
             'height_max':  0.21,
             'gait_type':   'trot',   # 대각선 쌍 동시 swing
             'cmd_vel_hold_time': 30.0,
-            'pitch_offset': -0.015, # rad. 음수 → 앞 살짝 들고 뒤 살짝 낮춤
+            'pitch_offset': 0.0,    # rad. 보정 없음
         }],
     )
 
