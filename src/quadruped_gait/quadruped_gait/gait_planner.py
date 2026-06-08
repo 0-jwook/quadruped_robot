@@ -31,19 +31,19 @@ class GaitPlanner:
 
         # 다리 순서: 0=FL, 1=FR, 2=RL, 3=RR
         if self.gait_type in ('8phase', 'wave', '4wave'):
-            # 4-leg wave gait — 한 번에 한 다리만 swing, 항상 3-leg 지지
-            # swing 순서: FL → RR → FR → RL (대각선 교차)
-            # Tswing 은 cycle 의 1/4 (한 다리 swing 비율)
+            # 4-leg wave gait — 한 번에 한 다리만 swing, 항상 3-leg 지지 (duty=0.75)
             self.Tswing = period / 4.0
             self.dSref  = [0.0, 0.5, 0.75, 0.25]  # FL, FR, RL, RR
-            # Tstance ≈ 3*Tswing (다른 3 다리가 stance 중일 동안 한 다리만 swing)
-            self.tstance_min_ratio = 2.8
-            self.tstance_max_ratio = 3.2
+            self.tstance_min_ratio = 2.8           # duty 0.737 (≥ 0.75 근처)
+            self.tstance_max_ratio = 3.5
         else:  # 'trot' 기본
             self.Tswing = period / 2.0
-            self.dSref  = [0.0, 0.5, 0.5, 0.0]    # 대각선 쌍 동기
-            self.tstance_min_ratio = 0.7
-            self.tstance_max_ratio = 1.3
+            self.dSref  = [0.0, 0.5, 0.5, 0.0]
+            # ★ 핵심: trot 은 대각선 쌍이 0.5 위상 차로 교대하므로 duty ≥ 0.5 필수.
+            # 그래야 한 쌍 swing 동안 반대 쌍이 항상 stance → 비행 구간 0.
+            # min_ratio = 1.3 → duty = 1.3/(1.3+1) = 0.565 (안전 마진 포함)
+            self.tstance_min_ratio = 1.3
+            self.tstance_max_ratio = 2.0           # duty 최대 0.667 까지 (저속 walk)
 
         self.ref_idx = 0    # FL 기준 다리
 
@@ -185,14 +185,13 @@ class GaitPlanner:
             stepZ = 0.0
         return stepX, stepY, stepZ
 
-    # ── 회전 처리 ────────────────────────────────────────────────────────────
-    def _yaw_step(self, idx, phase, is_swing, yaw_rate, clearance_scale=0.7):
+    # ── 회전 처리 (수평 변위만 담당, 발 들기는 메인 swing 이 담당) ──────────
+    def _yaw_step(self, idx, phase, is_swing, yaw_rate):
         """
-        yaw_rate 가 있을 때 좌/우 다리에 반대 방향 stride 추가.
+        yaw_rate 가 있을 때 좌/우 다리에 반대 방향 stride 추가 (수평 변위만).
         CCW 회전(yaw>0) → 좌측 다리 전진 / 우측 다리 후진.
-
-        clearance_scale: yaw_step 의 발 들기 높이를 메인 clearance 의 몇 배로 할지.
-                         제자리 회전(메인 L=0)일 때 0.7 정도면 적당히 발 들 수 있음.
+        clearance/penetration 은 0 — 발 들기는 메인 swing 이 일관되게 담당하여
+        두 컴포넌트 위상이 어긋나도 발 끌림 / 이중 합산 방지.
         """
         if abs(yaw_rate) < 1e-6:
             return 0.0, 0.0, 0.0
@@ -201,11 +200,11 @@ class GaitPlanner:
         Lr = yaw_rate * self.Tswing * 0.5
         Lr = max(-self.max_stride, min(self.max_stride, Lr))
 
-        c = self.clearance * clearance_scale
+        # clearance=0, penetration=0 → 수평 변위만 (sz 항상 0)
         if is_swing:
-            sx, sy, sz = self._bezier_swing(phase, Lr * side, 0.0, c)
+            sx, sy, sz = self._bezier_swing(phase, Lr * side, 0.0, 0.0)
         else:
-            sx, sy, sz = self._sine_stance(phase, Lr * side, 0.0, self.penetration * 0.5)
+            sx, sy, sz = self._sine_stance(phase, Lr * side, 0.0, 0.0)
         return sx, sy, sz
 
     # ── 공개 API ────────────────────────────────────────────────────────────
@@ -273,18 +272,14 @@ class GaitPlanner:
             L_raw = v_mag * self.Tswing
             L = min(self.max_stride, L_raw)
             StepVelocity = max(v_mag, 0.05)
-            main_clearance = self.clearance
-            main_penetration = self.penetration
         else:
             # 제자리 회전 전용 모드:
-            #   - 메인 L 에 작은 forward bias 추가 (좌우 추진력 비대칭이 만드는 후진 효과 상쇄)
-            #   - 메인 swing 의 발 들기 / stance 누름은 0 (발 들기는 yaw_step 만 담당)
-            #   - yaw_step 만 좌/우 다리 stride 만들어 회전
+            #   - 메인 L = 0  → forward 드리프트 없음 (진짜 제자리)
+            #   - 단, 메인 swing 의 발 들기(clearance) 는 유지 → 발 끌림 방지
+            #   - yaw_step 은 horizontal 변위만 담당 (clearance=0)
             lat_frac = 0.0
-            L = self.max_stride * 0.3            # 회전 시 후진 상쇄 forward bias
+            L = 0.0
             StepVelocity = max(abs(omega) * self.kin.L1 * 2.0, 0.05)
-            main_clearance = 0.0                  # 메인 swing 발 들기 0 (yaw_step 에서만)
-            main_penetration = 0.0                # 메인 stance 누름 0
 
         # ④ Tstance 계산 (게이트별 ratio 적용)
         if L > 1e-6:
@@ -312,12 +307,13 @@ class GaitPlanner:
         for i, (lx, ly) in enumerate(refs):
             phase, is_swing = self._get_phase(i, Tstance)
 
-            # 메인 stride (전진/후진/측방). 회전 모드면 clearance=0 으로 발 들기 메인 측 0.
-            if Tstance > 0.0 and L > 1e-6:
+            # 메인 swing/stance — 발 들기/누름은 항상 여기서 담당 (yaw_step 은 horizontal 만)
+            # L=0 (회전 모드) 일 때도 호출: stepX/Y 는 0 이지만 stepZ (clearance) 는 살아있음
+            if Tstance > 0.0:
                 if is_swing:
-                    rx, ry, rz = self._bezier_swing(phase, L, lat_frac, main_clearance)
+                    rx, ry, rz = self._bezier_swing(phase, L, lat_frac, self.clearance)
                 else:
-                    rx, ry, rz = self._sine_stance(phase, L, lat_frac, main_penetration)
+                    rx, ry, rz = self._sine_stance(phase, L, lat_frac, self.penetration)
             else:
                 rx, ry, rz = 0.0, 0.0, 0.0
 
