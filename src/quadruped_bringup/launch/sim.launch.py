@@ -83,7 +83,7 @@ def generate_launch_description():
             'period':      1.0,     # 전체 cycle (Tswing = 0.5s)
             'height_min':  0.07,    # 앉기 자세 가능 높이 (다리 많이 굽힘)
             'height_max':  0.21,
-            'gait_type':   'trot',  # BezierGait 는 trot 만 지원
+            'gait_type':   '8phase',  # 4-leg wave gait (한 번에 한 다리 swing)
             'cmd_vel_hold_time': 30.0,
             'pitch_offset': 0.0,    # rad. 캘리브에서 흡수돼 0 으로 복귀
         }]
