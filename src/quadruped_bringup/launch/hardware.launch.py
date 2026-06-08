@@ -48,7 +48,7 @@ def generate_launch_description():
             'height_max':  0.21,
             'gait_type':   'trot',  # BezierGait 는 trot 만 지원
             'cmd_vel_hold_time': 30.0,
-            'pitch_offset': 0.02,   # rad (~1.15°) 앞쪽 살짝 들기. + = 앞 올림, - = 앞 내림
+            'pitch_offset': 0.0,    # rad. 캘리브에서 흡수돼 0 으로 복귀
         }],
     )
 
