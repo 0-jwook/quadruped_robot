@@ -51,14 +51,65 @@ LEG_NAMES = ['FL', 'FR', 'RL', 'RR']
 JOINT_NAMES = ['hip', 'thigh', 'calf']
 
 # raw HOME (다리 쫙 편 좌우 대칭 자세, SERVO_TRIMS=0 기준)
-# FL/RL: thigh=0 (수직 아래), calf=180 (직선)
-# FR/RR: thigh=180 (좌측 거울), calf=0 (좌측 거울)
 RAW_HOME = [
     90.0,   0.0, 180.0,   # FL
     90.0, 180.0,   0.0,   # FR
     90.0,   0.0, 180.0,   # RL
     90.0, 180.0,   0.0,   # RR
 ]
+
+
+def _compute_stand_pose(body_height: float = 0.17):
+    """실제 보행에 사용되는 stand 자세 raw 서보 각도 (SERVO_TRIMS=0 기준)."""
+    import math as _m
+    candidates = [
+        '/home/jaewook/Quardruped/install/quadruped_gait/lib/python3.10/site-packages',
+        '/home/jaewook/Quardruped/install/quadruped_gait/lib/python3.8/site-packages',
+        '/home/jaewook/Quardruped/install/quadruped_gait/lib/python3.12/site-packages',
+        '/home/jaewook/Quardruped/src/quadruped_gait',
+    ]
+    for p in candidates:
+        if p not in sys.path:
+            sys.path.insert(0, p)
+    from quadruped_gait.kinematics import LegKinematics
+    from quadruped_gait.gait_planner import GaitPlanner
+
+    kin = LegKinematics(0.030, 0.115, 0.135)
+    gp = GaitPlanner(kin, body_height=body_height,
+                     step_height=0.03, max_stride=0.025, period=1.0)
+    angles_rad = gp.get_stand_posture(roll=0.0, pitch=0.0, body_height=body_height)
+
+    out = []
+    for i, leg in enumerate(LEG_NAMES):
+        q1, q2, q3 = angles_rad[i * 3: i * 3 + 3]
+        is_right = leg in ('FR', 'RR')
+        if not is_right:
+            shoulder = 90.0 + _m.degrees(q1)
+            thigh    =  0.0 - _m.degrees(q2)
+            calf     = 180.0 - _m.degrees(q3)
+        else:
+            shoulder =  90.0 + _m.degrees(q1)
+            thigh    = 180.0 + _m.degrees(q2)
+            calf     =   0.0 + _m.degrees(q3)
+        out.extend([shoulder, thigh, calf])
+    return out
+
+
+# 자세 모드 선택: 인자 --pose stand|home (기본 stand)
+POSE_MODE = 'stand'
+if '--pose' in sys.argv:
+    _idx = sys.argv.index('--pose')
+    if _idx + 1 < len(sys.argv):
+        POSE_MODE = sys.argv[_idx + 1].lower()
+        sys.argv.pop(_idx + 1)
+        sys.argv.pop(_idx)
+
+if POSE_MODE == 'home':
+    RAW_BASE = RAW_HOME
+    BASE_NAME = 'HOME (다리 쫙 편 자세)'
+else:
+    RAW_BASE = _compute_stand_pose(body_height=0.17)
+    BASE_NAME = 'STAND (실제 보행 자세)'
 
 
 def _load_servo_trims_from_file(path):
@@ -89,8 +140,8 @@ INITIAL_TRIMS = _load_servo_trims_from_file(HARDWARE_BRIDGE_PATH) or {
     'RR': (0.0, 0.0, 0.0),
 }
 
-# 캘리브 시작 자세 = raw HOME + 현재 SERVO_TRIMS (이미 보정된 자세에서 시작)
-HOME = list(RAW_HOME)
+# 캘리브 시작 자세 = raw 기준 자세 + 현재 SERVO_TRIMS (이미 보정된 자세에서 시작)
+HOME = list(RAW_BASE)
 for _i, _leg in enumerate(LEG_NAMES):
     for _j in range(3):
         HOME[_i * 3 + _j] += INITIAL_TRIMS[_leg][_j]
@@ -131,7 +182,7 @@ def getch_non_blocking(timeout=0.05):
 # ── 출력 ────────────────────────────────────────────────────────────────────
 def print_state(angles, leg_idx, joint_idx):
     cur = angles[leg_idx * 3 + joint_idx]
-    raw = RAW_HOME[leg_idx * 3 + joint_idx]
+    raw = RAW_BASE[leg_idx * 3 + joint_idx]
     initial = HOME[leg_idx * 3 + joint_idx]      # raw + initial_trim
     total_trim = cur - raw                       # 누적 trim (현재 + 사용자 추가)
     delta = cur - initial                        # 이번 세션에서 추가된 양
@@ -151,7 +202,7 @@ def print_trims(angles):
     sys.stdout.write("SERVO_TRIMS = {\n")
     sys.stdout.write("    #        shoulder   thigh    calf\n")
     for i, leg in enumerate(LEG_NAMES):
-        trims = [angles[i * 3 + j] - RAW_HOME[i * 3 + j] for j in range(3)]
+        trims = [angles[i * 3 + j] - RAW_BASE[i * 3 + j] for j in range(3)]
         sys.stdout.write(f"    '{leg}': ({trims[0]:8.1f}, {trims[1]:7.1f}, {trims[2]:7.1f}),\n")
     sys.stdout.write("}\n")
     sys.stdout.write("=" * 60 + "\n\n")
@@ -179,11 +230,12 @@ def main():
         ser.write(pkt)
         time.sleep(0.05)
 
-    print("\n현재 SERVO_TRIMS 적용 상태에서 시작:")
+    print(f"\n캘리브 자세: {BASE_NAME}")
+    print("현재 SERVO_TRIMS 적용 상태에서 시작:")
     for leg in LEG_NAMES:
         h, t, c = INITIAL_TRIMS[leg]
         print(f"  {leg}: hip={h:+5.1f}  thigh={t:+5.1f}  calf={c:+5.1f}")
-    print("\n초기 자세(HOME + trim 적용) 도달. 추가 미세 조정 시작.\n")
+    print(f"\n초기 자세({BASE_NAME} + trim 적용) 도달. 추가 미세 조정 시작.\n")
     print_state(angles, leg_idx, joint_idx)
 
     last_send = time.time()
