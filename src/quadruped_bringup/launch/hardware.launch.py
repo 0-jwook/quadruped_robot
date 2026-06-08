@@ -48,7 +48,7 @@ def generate_launch_description():
             'height_max':  0.21,
             'gait_type':   'trot',   # 대각선 쌍 동시 swing
             'cmd_vel_hold_time': 30.0,
-            'pitch_offset': 0.0,    # rad. 캘리브에서 흡수돼 0 으로 복귀
+            'pitch_offset': -0.015, # rad (~-0.86°) 앞 살짝 내림 → 윌리 방지
         }],
     )
 
