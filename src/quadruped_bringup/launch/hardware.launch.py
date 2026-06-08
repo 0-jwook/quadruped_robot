@@ -42,8 +42,8 @@ def generate_launch_description():
             'body_height': 0.17,
             # SpotMicroAI BezierGait 파라미터
             'step_height': 0.045,   # ClearanceHeight: 스윙 시 최대 발 들기 높이
-            'max_stride':  0.025,   # StepLength 상한 (보폭 작게 → 차분한 속도)
-            'period':      1.6,     # 전체 cycle. 8phase 에선 Tswing=period/4=0.4s
+            'max_stride':  0.045,   # StepLength 상한 (보폭 크게 → 한 step 멀리)
+            'period':      2.0,     # 전체 cycle. 8phase 에선 Tswing=period/4=0.5s
             'height_min':  0.07,    # 앉기 자세 가능 높이 (다리 많이 굽힘)
             'height_max':  0.21,
             'gait_type':   '8phase',  # 4-leg wave gait (한 번에 한 다리 swing)
