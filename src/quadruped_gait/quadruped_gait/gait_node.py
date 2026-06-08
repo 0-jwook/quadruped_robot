@@ -51,6 +51,9 @@ class GaitNode(Node):
         # 고정 pitch 보정 (앞쪽 살짝 들기). +값 → 앞쪽 올라감, -값 → 앞쪽 내려감.
         # 1° ≈ 0.0175 rad. 실제 로봇이 앞으로 기울면 + 로 미세 조정.
         self.declare_parameter('pitch_offset', 0.02)
+        # 전진 시 자동 yaw 보정 (좌우 비대칭으로 직진이 휘는 것 상쇄).
+        # 좌측으로 휘면 음수(-)로 우측 회전 추가. 우측으로 휘면 양수(+).
+        self.declare_parameter('forward_yaw_correction', -0.05)
 
         L1 = self.get_parameter('L1').value
         L2 = self.get_parameter('L2').value
@@ -64,11 +67,13 @@ class GaitNode(Node):
         gt = self.get_parameter('gait_type').value
         self._cmd_vel_hold_time = self.get_parameter('cmd_vel_hold_time').value
         self._pitch_offset = self.get_parameter('pitch_offset').value
+        fyc = self.get_parameter('forward_yaw_correction').value
 
         self.kin     = LegKinematics(L1=L1, L2=L2, L3=L3)
         self.planner = GaitPlanner(self.kin,
                                    body_height=bh, step_height=sh,
-                                   max_stride=ms, period=p, gait_type=gt)
+                                   max_stride=ms, period=p, gait_type=gt,
+                                   forward_yaw_correction=fyc)
         self.get_logger().info(f'Gait type: {gt}')
 
         # ROS2 통신 설정

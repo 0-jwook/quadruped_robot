@@ -20,7 +20,8 @@ class GaitPlanner:
 
     def __init__(self, kinematics,
                  body_height=0.17, step_height=0.04,
-                 max_stride=0.04, period=0.4, gait_type='trot'):
+                 max_stride=0.04, period=0.4, gait_type='trot',
+                 forward_yaw_correction=0.0):
         self.kin         = kinematics
         self.body_height = body_height
         self.clearance   = step_height       # Bezier swing 최대 높이
@@ -28,6 +29,9 @@ class GaitPlanner:
         self.penetration = 0.002             # 스탠스 시 살짝 눌러 밟기
         self.dt          = 0.02              # 50 Hz
         self.gait_type   = gait_type.lower()
+        # 전진 시 자동 yaw 보정 (좌우 비대칭에 따른 휨 상쇄).
+        # 좌측으로 휘면 음수(-)로 우측 회전 추가, 우측으로 휘면 양수(+).
+        self.forward_yaw_correction = forward_yaw_correction
 
         # 다리 순서: 0=FL, 1=FR, 2=RL, 3=RR
         if self.gait_type in ('8phase', 'wave', '4wave'):
@@ -250,6 +254,11 @@ class GaitPlanner:
           · 정지:   모두 ≈ 0   → stand 자세
         """
         bh = body_height if body_height is not None else self.body_height
+
+        # ⓐ 전진 시 자동 yaw 보정 (좌우 비대칭에 따른 휨 상쇄).
+        #    명시적 omega 명령이 없을 때만 적용. 직진을 일직선으로 만듦.
+        if vx > 0.01 and abs(omega) < 0.05:
+            omega += self.forward_yaw_correction
 
         # ① 안전 clamp: 우리 작은 로봇 크기 (L2+L3=0.25m) 에 맞춰
         #    teleop_twist_keyboard 기본 0.5 m/s 가 너무 빠르기 때문.
