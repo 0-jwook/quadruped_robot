@@ -59,7 +59,23 @@ RAW_HOME = [
 ]
 
 
-def _compute_stand_pose(body_height: float = 0.17):
+def _load_pitch_offset_from_launch(path):
+    """launch 파일에서 pitch_offset 파라미터 값을 파싱."""
+    import re
+    try:
+        text = open(path).read()
+    except Exception:
+        return 0.0
+    m = re.search(r"['\"]pitch_offset['\"]\s*:\s*([-\d.]+)", text)
+    return float(m.group(1)) if m else 0.0
+
+
+PITCH_OFFSET = _load_pitch_offset_from_launch(
+    '/home/jaewook/Quardruped/src/quadruped_bringup/launch/hardware.launch.py'
+)
+
+
+def _compute_stand_pose(body_height: float = 0.17, pitch_offset: float = 0.0):
     """실제 보행에 사용되는 stand 자세 raw 서보 각도 (SERVO_TRIMS=0 기준)."""
     import math as _m
     candidates = [
@@ -77,7 +93,7 @@ def _compute_stand_pose(body_height: float = 0.17):
     kin = LegKinematics(0.030, 0.115, 0.135)
     gp = GaitPlanner(kin, body_height=body_height,
                      step_height=0.03, max_stride=0.025, period=1.0)
-    angles_rad = gp.get_stand_posture(roll=0.0, pitch=0.0, body_height=body_height)
+    angles_rad = gp.get_stand_posture(roll=0.0, pitch=pitch_offset, body_height=body_height)
 
     out = []
     for i, leg in enumerate(LEG_NAMES):
@@ -108,8 +124,8 @@ if POSE_MODE == 'home':
     RAW_BASE = RAW_HOME
     BASE_NAME = 'HOME (다리 쫙 편 자세)'
 else:
-    RAW_BASE = _compute_stand_pose(body_height=0.17)
-    BASE_NAME = 'STAND (실제 보행 자세)'
+    RAW_BASE = _compute_stand_pose(body_height=0.17, pitch_offset=PITCH_OFFSET)
+    BASE_NAME = f'STAND (보행 자세, pitch_offset={PITCH_OFFSET:.3f} rad 적용)'
 
 
 def _load_servo_trims_from_file(path):
