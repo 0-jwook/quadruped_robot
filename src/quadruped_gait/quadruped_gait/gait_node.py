@@ -48,6 +48,9 @@ class GaitNode(Node):
         self.declare_parameter('height_max',  0.21)
         self.declare_parameter('gait_type',   'trot')
         self.declare_parameter('cmd_vel_hold_time', 30.0)
+        # 고정 pitch 보정 (앞쪽 살짝 들기). +값 → 앞쪽 올라감, -값 → 앞쪽 내려감.
+        # 1° ≈ 0.0175 rad. 실제 로봇이 앞으로 기울면 + 로 미세 조정.
+        self.declare_parameter('pitch_offset', 0.02)
 
         L1 = self.get_parameter('L1').value
         L2 = self.get_parameter('L2').value
@@ -60,6 +63,7 @@ class GaitNode(Node):
         self._height_max = self.get_parameter('height_max').value
         gt = self.get_parameter('gait_type').value
         self._cmd_vel_hold_time = self.get_parameter('cmd_vel_hold_time').value
+        self._pitch_offset = self.get_parameter('pitch_offset').value
 
         self.kin     = LegKinematics(L1=L1, L2=L2, L3=L3)
         self.planner = GaitPlanner(self.kin,
@@ -137,14 +141,18 @@ class GaitNode(Node):
         since_last = time.monotonic() - self._last_cmd_time
         walking = self._walk_active and (since_last < self._cmd_vel_hold_time)
 
+        # IMU pitch 에 고정 offset 더하기 (실제 로봇 앞쪽 기울임 보정).
+        # IMU 없을 때 self.pitch=0 이라 pitch_eff = offset 만 적용됨.
+        pitch_eff = self.pitch + self._pitch_offset
+
         if walking:
             joint_angles = self.planner.get_walk_posture(
                 self.cmd_vx, self.cmd_vy, self.cmd_omega, elapsed,
-                self.roll, self.pitch, self.current_body_height)
+                self.roll, pitch_eff, self.current_body_height)
         else:
             self._walk_active = False
             joint_angles = self.planner.get_stand_posture(
-                self.roll, self.pitch, self.current_body_height)
+                self.roll, pitch_eff, self.current_body_height)
 
         # 2. 메시지 생성 및 발행
         msg = JointTrajectory()
