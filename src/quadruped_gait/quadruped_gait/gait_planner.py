@@ -273,12 +273,18 @@ class GaitPlanner:
             L_raw = v_mag * self.Tswing
             L = min(self.max_stride, L_raw)
             StepVelocity = max(v_mag, 0.05)
+            main_clearance = self.clearance
+            main_penetration = self.penetration
         else:
-            # 제자리 회전 전용 모드: 메인 stride 는 0 (전후 step 없음, 발 들기도 메인 측은 0)
-            # phase 진행은 가상 Tstance 로. yaw_step 만 발 움직임 담당.
+            # 제자리 회전 전용 모드:
+            #   - 메인 L 에 작은 forward bias 추가 (좌우 추진력 비대칭이 만드는 후진 효과 상쇄)
+            #   - 메인 swing 의 발 들기 / stance 누름은 0 (발 들기는 yaw_step 만 담당)
+            #   - yaw_step 만 좌/우 다리 stride 만들어 회전
             lat_frac = 0.0
-            L = 0.0
+            L = self.max_stride * 0.3            # 회전 시 후진 상쇄 forward bias
             StepVelocity = max(abs(omega) * self.kin.L1 * 2.0, 0.05)
+            main_clearance = 0.0                  # 메인 swing 발 들기 0 (yaw_step 에서만)
+            main_penetration = 0.0                # 메인 stance 누름 0
 
         # ④ Tstance 계산 (게이트별 ratio 적용)
         if L > 1e-6:
@@ -306,12 +312,12 @@ class GaitPlanner:
         for i, (lx, ly) in enumerate(refs):
             phase, is_swing = self._get_phase(i, Tstance)
 
-            # 메인 stride (전진/후진/측방). L=0 (제자리 회전 모드) 면 발 들기도 0.
+            # 메인 stride (전진/후진/측방). 회전 모드면 clearance=0 으로 발 들기 메인 측 0.
             if Tstance > 0.0 and L > 1e-6:
                 if is_swing:
-                    rx, ry, rz = self._bezier_swing(phase, L, lat_frac, self.clearance)
+                    rx, ry, rz = self._bezier_swing(phase, L, lat_frac, main_clearance)
                 else:
-                    rx, ry, rz = self._sine_stance(phase, L, lat_frac, self.penetration)
+                    rx, ry, rz = self._sine_stance(phase, L, lat_frac, main_penetration)
             else:
                 rx, ry, rz = 0.0, 0.0, 0.0
 
