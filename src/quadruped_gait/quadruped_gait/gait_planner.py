@@ -27,12 +27,24 @@ class GaitPlanner:
         self.max_stride  = max_stride        # L (half stride) 상한
         self.penetration = 0.002             # 스탠스 시 살짝 눌러 밟기
         self.dt          = 0.02              # 50 Hz
-        self.Tswing      = period / 2.0      # 한쪽 스윙 시간 (period=0.4 → 0.2s)
+        self.gait_type   = gait_type.lower()
 
         # 다리 순서: 0=FL, 1=FR, 2=RL, 3=RR
-        # BezierGait dSref (phase lag): FL=0, FR=0.5, RL=0.5, RR=0
-        # → Trot: FL+RR 동시 / FR+RL 동시 (반대각선)
-        self.dSref = [0.0, 0.5, 0.5, 0.0]
+        if self.gait_type in ('8phase', 'wave', '4wave'):
+            # 4-leg wave gait — 한 번에 한 다리만 swing, 항상 3-leg 지지
+            # swing 순서: FL → RR → FR → RL (대각선 교차)
+            # Tswing 은 cycle 의 1/4 (한 다리 swing 비율)
+            self.Tswing = period / 4.0
+            self.dSref  = [0.0, 0.5, 0.75, 0.25]  # FL, FR, RL, RR
+            # Tstance ≈ 3*Tswing (다른 3 다리가 stance 중일 동안 한 다리만 swing)
+            self.tstance_min_ratio = 2.8
+            self.tstance_max_ratio = 3.2
+        else:  # 'trot' 기본
+            self.Tswing = period / 2.0
+            self.dSref  = [0.0, 0.5, 0.5, 0.0]    # 대각선 쌍 동기
+            self.tstance_min_ratio = 0.7
+            self.tstance_max_ratio = 1.3
+
         self.ref_idx = 0    # FL 기준 다리
 
         # Bezier 위상 추적 상태
@@ -268,14 +280,14 @@ class GaitPlanner:
             L = 0.0
             StepVelocity = max(abs(omega) * self.kin.L1 * 2.0, 0.05)
 
-        # ④ Tstance 계산
+        # ④ Tstance 계산 (게이트별 ratio 적용)
         if L > 1e-6:
             Tstance = 2.0 * L / StepVelocity
-            Tstance = max(self.Tswing * 0.7,
-                          min(self.Tswing * 1.3, Tstance))
+            Tstance = max(self.Tswing * self.tstance_min_ratio,
+                          min(self.Tswing * self.tstance_max_ratio, Tstance))
         elif pure_rotation:
             # L=0 이지만 phase 가 돌아가야 yaw_step 이 작동함
-            Tstance = self.Tswing
+            Tstance = self.Tswing * self.tstance_min_ratio
         else:
             Tstance = 0.0
         Tstride = Tstance + self.Tswing
