@@ -48,7 +48,8 @@ def generate_launch_description():
             'height_max':  0.21,
             'gait_type':   'trot',   # 직진/회전=trot, 측방 이동(게다리) 시 자동 wave 전환
             'cmd_vel_hold_time': 30.0,
-            'pitch_offset': 0.0,    # rad. 보정 없음
+            'pitch_offset': 0.015,  # rad. + = 앞 들기. 로봇 앞 기울임 보정
+            'roll_offset':  0.015,  # rad. + = 우측 들기. 로봇 우측 기울임 보정
         }],
     )
 
