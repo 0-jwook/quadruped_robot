@@ -190,14 +190,28 @@ class GaitPlanner:
         """
         yaw_rate 가 있을 때 좌/우 다리에 반대 방향 stride 추가 (수평 변위만).
         CCW 회전(yaw>0) → 좌측 다리 전진 / 우측 다리 후진.
-        clearance/penetration = 0  → 발 들기는 메인 swing 이 일관되게 담당하여
-        두 컴포넌트 위상 어긋남으로 인한 발 끌림 / 이중 합산 방지.
+        clearance/penetration = 0  → 발 들기는 메인 swing 이 담당.
+
+        body 앞 추진 보정:
+        실제 로봇은 좌우 추진력에 잔여 비대칭이 있어 회전 시 body 가 뒤로 drift.
+        회전 방향에 관계없이 "body 앞으로 미는 쪽" 다리의 stride 를 살짝 강화하여
+        drift 를 상쇄.
         """
         if abs(yaw_rate) < 1e-6:
             return 0.0, 0.0, 0.0
 
         side = +1.0 if idx in (0, 2) else -1.0   # FL,RL: +좌측 / FR,RR: -우측
-        Lr = yaw_rate * self.Tswing * 0.5
+
+        # 회전 방향에 따라 "body 앞으로 미는" 다리 강화:
+        # CCW (yaw>0) → 좌측이 body 를 앞으로 → 좌측 강화
+        # CW  (yaw<0) → 우측이 body 를 앞으로 → 우측 강화
+        FORWARD_BOOST = 1.15
+        if yaw_rate > 0:
+            boost = FORWARD_BOOST if side > 0 else 1.0
+        else:
+            boost = 1.0 if side > 0 else FORWARD_BOOST
+
+        Lr = yaw_rate * self.Tswing * 0.5 * boost
         Lr = max(-self.max_stride, min(self.max_stride, Lr))
 
         # clearance=0, penetration=0 → 수평 변위만 (sz 항상 0)
