@@ -46,7 +46,7 @@ def generate_launch_description():
             'period':      0.8,     # 전체 cycle (1.0→0.8, cadence ↑ → 걷는 속도 ↑). trot 에선 Tswing=period/2=0.4s
             'height_min':  0.07,    # 앉기 자세 가능 높이 (다리 많이 굽힘)
             'height_max':  0.21,
-            'gait_type':   'trot',   # 직진/측방=trot, 제자리 회전 시 자동 wave 전환
+            'gait_type':   'trot',   # 직진/회전=trot, 측방 이동(게다리) 시 자동 wave 전환
             'cmd_vel_hold_time': 30.0,
             'pitch_offset': 0.0,    # rad. 보정 없음
         }],
