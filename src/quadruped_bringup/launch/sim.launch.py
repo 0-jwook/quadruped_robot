@@ -80,7 +80,7 @@ def generate_launch_description():
             'body_height': 0.17,
             'step_height': 0.045,   # ClearanceHeight
             'max_stride':  0.025,   # StepLength 상한 (보폭 작게)
-            'period':      1.0,     # 전체 cycle. trot: Tswing=0.5s
+            'period':      1.3,     # 전체 cycle. 8phase: Tswing=0.325s
             'height_min':  0.07,    # 앉기 자세 가능 높이 (다리 많이 굽힘)
             'height_max':  0.21,
             'gait_type':   '8phase', # 4-leg wave (한 번에 한 다리 swing)
