@@ -78,7 +78,7 @@ def generate_launch_description():
             'L2': 0.115,
             'L3': 0.135,
             'body_height': 0.17,
-            'step_height': 0.03,    # ClearanceHeight
+            'step_height': 0.045,   # ClearanceHeight
             'max_stride':  0.025,   # StepLength 상한 (보폭 작게)
             'period':      1.0,     # 전체 cycle. trot: Tswing=0.5s
             'height_min':  0.07,    # 앉기 자세 가능 높이 (다리 많이 굽힘)
