@@ -65,11 +65,13 @@ class GaitPlanner:
             self.tstance_min_ratio = 2.8
             self.tstance_max_ratio = 3.5
         else:  # 'trot'
-            # 대각선 쌍 동기 (duty ~0.41 — 비행 구간 있음, 사용자 선택)
+            # 대각선 쌍 동기. mike4192 의 4-phase trot (overlap 포함) 의 duty 0.75 를
+            # 우리 2-phase 구조에서 따라잡기 위해 ratio 를 3.0 으로 키움.
+            # 그러면 한 쌍 swing 동안 반대 쌍이 항상 stance + 충분한 안정 마진.
             self.Tswing = self.period / 2.0
             self.dSref  = [0.0, 0.5, 0.5, 0.0]
-            self.tstance_min_ratio = 0.7
-            self.tstance_max_ratio = 1.3
+            self.tstance_min_ratio = 3.0    # duty = 3/(3+1) = 0.75 (mike4192 동일)
+            self.tstance_max_ratio = 4.0    # 저속에서 duty 0.80 까지
         self._active_gait = name
 
     def _switch_gait_if_needed(self, target):
