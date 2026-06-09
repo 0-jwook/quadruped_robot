@@ -303,10 +303,12 @@ class GaitPlanner:
         if v_mag < 0.005 and abs(omega) < 0.05:
             return self.get_stand_posture(roll, pitch, bh)
 
-        # ②-b 게이트 자동 전환: gait_type='trot' 모드에서 제자리 회전 시 wave 로
+        # ②-b 게이트 자동 전환: gait_type='trot' 모드에서 측방 이동 시 wave 로
+        # (제자리 회전은 trot 그대로 — 회전 자체는 yaw_step 이 좌우 다리에 반대 stride)
+        # 측방은 trot 본질적 약점 → 한 다리씩 옮기는 wave 가 게다리처럼 안정.
         if self.gait_type == 'trot':
-            pure_rotation_input = (v_mag < 0.005 and abs(omega) > 0.05)
-            target_gait = 'wave' if pure_rotation_input else 'trot'
+            pure_lateral_input = (abs(vy) > 0.01 and abs(vx) < 0.005)
+            target_gait = 'wave' if pure_lateral_input else 'trot'
             self._switch_gait_if_needed(target_gait)
 
         # ③ cmd_vel → BezierGait 입력 변환
