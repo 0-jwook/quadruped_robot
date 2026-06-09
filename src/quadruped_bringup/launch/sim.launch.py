@@ -78,12 +78,16 @@ def generate_launch_description():
             'L2': 0.115,
             'L3': 0.135,
             'body_height': 0.17,
-            'step_height': 0.03,    # ClearanceHeight
-            'max_stride':  0.025,   # StepLength 상한 (보폭 작게)
-            'period':      0.55,    # 전체 cycle. trot: Tswing=0.275s
-            'height_min':  0.07,    # 앉기 자세 가능 높이 (다리 많이 굽힘)
+            'step_height': 0.035,   # swing 최대 발 들기 높이
+            'max_stride':  0.05,    # 발 stride 벡터 크기 상한
+            'period':      0.5,     # 전체 cycle Tstride
+            'duty_trot':   0.6,     # trot stance 비율
+            'duty_wave':   0.75,    # wave stance 비율
+            'hip_x':       0.10,    # 몸통중심~발 종방향
+            'hip_y':       0.05,    # 몸통중심~발 횡방향
+            'height_min':  0.07,
             'height_max':  0.21,
-            'gait_type':   'trot',   # 직진/회전=trot, 측방 이동(게다리) 시 자동 wave 전환
+            'gait_type':   'trot',  # 직진/회전=trot, 측방=wave 자동 전환
             'cmd_vel_hold_time': 30.0,
             'pitch_offset': 0.015,  # rad. + = 앞 들기
             'roll_offset':  0.015,  # rad. + = 우측 들기

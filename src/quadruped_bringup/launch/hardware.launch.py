@@ -40,16 +40,20 @@ def generate_launch_description():
             'L2': 0.115,
             'L3': 0.135,
             'body_height': 0.17,
-            # SpotMicroAI BezierGait 파라미터
-            'step_height': 0.03,    # ClearanceHeight: 스윙 시 최대 발 들기 높이
-            'max_stride':  0.035,   # StepLength 상한 (0.025→0.035, 보폭 ↑ → 걷는 속도 조금 높임)
-            'period':      0.55,    # 전체 cycle (0.65→0.55, cadence ↑). trot 에선 Tswing=period/2=0.275s
-            'height_min':  0.07,    # 앉기 자세 가능 높이 (다리 많이 굽힘)
+            # SpotMicroAI BezierGait 파라미터 (통합 회전 운동학 + 고정 duty)
+            'step_height': 0.035,   # swing 최대 발 들기 높이
+            'max_stride':  0.05,    # 발 stride 벡터 크기 상한 (속도 상한 결정)
+            'period':      0.5,     # 전체 cycle Tstride. max_speed = max_stride/(duty·period)
+            'duty_trot':   0.6,     # trot stance 비율 (0.6 → 비행 구간 없음 + 속도 ↑)
+            'duty_wave':   0.75,    # wave stance 비율 (3-leg 지지)
+            'hip_x':       0.10,    # 몸통중심~발 종방향 (회전 운동학 — 실제 치수로 교체 권장)
+            'hip_y':       0.05,    # 몸통중심~발 횡방향
+            'height_min':  0.07,    # 앉기 자세 가능 높이
             'height_max':  0.21,
-            'gait_type':   'trot',   # 직진/회전=trot, 측방 이동(게다리) 시 자동 wave 전환
+            'gait_type':   'trot',  # 직진/회전=trot, 측방(게다리)=wave 자동 전환
             'cmd_vel_hold_time': 30.0,
-            'pitch_offset': 0.015,  # rad. + = 앞 들기. 로봇 앞 기울임 보정
-            'roll_offset':  0.015,  # rad. + = 우측 들기. 로봇 우측 기울임 보정
+            'pitch_offset': 0.015,  # rad. + = 앞 들기 (로봇 앞 기울임 보정)
+            'roll_offset':  0.015,  # rad. + = 우측 들기 (로봇 우측 기울임 보정)
         }],
     )
 

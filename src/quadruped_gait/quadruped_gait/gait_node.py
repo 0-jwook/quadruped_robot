@@ -42,8 +42,12 @@ class GaitNode(Node):
         self.declare_parameter('L3', 0.135)
         self.declare_parameter('body_height', 0.17)
         self.declare_parameter('step_height', 0.04)
-        self.declare_parameter('max_stride',  0.03)
-        self.declare_parameter('period',      0.8)
+        self.declare_parameter('max_stride',  0.05)
+        self.declare_parameter('period',      0.5)    # 전체 cycle 시간 (Tstride)
+        self.declare_parameter('duty_trot',   0.6)    # trot stance 비율 (≥0.5 면 비행 없음)
+        self.declare_parameter('duty_wave',   0.75)   # wave stance 비율 (3-leg 지지)
+        self.declare_parameter('hip_x',       0.10)   # 몸통중심~발 종방향 거리 (회전 운동학)
+        self.declare_parameter('hip_y',       0.05)   # 몸통중심~발 횡방향 거리 (회전 운동학)
         self.declare_parameter('height_min',  0.11)
         self.declare_parameter('height_max',  0.21)
         self.declare_parameter('gait_type',   'trot')
@@ -65,6 +69,10 @@ class GaitNode(Node):
         self._height_min = self.get_parameter('height_min').value
         self._height_max = self.get_parameter('height_max').value
         gt = self.get_parameter('gait_type').value
+        dt_trot = self.get_parameter('duty_trot').value
+        dt_wave = self.get_parameter('duty_wave').value
+        hip_x = self.get_parameter('hip_x').value
+        hip_y = self.get_parameter('hip_y').value
         self._cmd_vel_hold_time = self.get_parameter('cmd_vel_hold_time').value
         self._pitch_offset = self.get_parameter('pitch_offset').value
         self._roll_offset  = self.get_parameter('roll_offset').value
@@ -72,8 +80,12 @@ class GaitNode(Node):
         self.kin     = LegKinematics(L1=L1, L2=L2, L3=L3)
         self.planner = GaitPlanner(self.kin,
                                    body_height=bh, step_height=sh,
-                                   max_stride=ms, period=p, gait_type=gt)
-        self.get_logger().info(f'Gait type: {gt}')
+                                   max_stride=ms, period=p, gait_type=gt,
+                                   duty_trot=dt_trot, duty_wave=dt_wave,
+                                   hip_x=hip_x, hip_y=hip_y)
+        self.get_logger().info(
+            f'Gait: {gt}, period={p}s, duty_trot={dt_trot}, '
+            f'max_speed≈{self.planner.max_speed():.3f} m/s')
 
         # ROS2 통신 설정
         self.subscription = self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 10)
