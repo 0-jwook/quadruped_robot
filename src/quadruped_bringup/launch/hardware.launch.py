@@ -43,7 +43,7 @@ def generate_launch_description():
             # SpotMicroAI BezierGait 파라미터
             'step_height': 0.03,    # ClearanceHeight: 스윙 시 최대 발 들기 높이
             'max_stride':  0.035,   # StepLength 상한 (0.025→0.035, 보폭 ↑ → 걷는 속도 조금 높임)
-            'period':      0.8,     # 전체 cycle (1.0→0.8, cadence ↑ → 걷는 속도 ↑). trot 에선 Tswing=period/2=0.4s
+            'period':      0.65,    # 전체 cycle (0.8→0.65, cadence ↑). trot 에선 Tswing=period/2=0.325s
             'height_min':  0.07,    # 앉기 자세 가능 높이 (다리 많이 굽힘)
             'height_max':  0.21,
             'gait_type':   'trot',   # 직진/회전=trot, 측방 이동(게다리) 시 자동 wave 전환
