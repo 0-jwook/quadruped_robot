@@ -27,23 +27,17 @@ class GaitPlanner:
         self.max_stride  = max_stride        # L (half stride) 상한
         self.penetration = 0.002             # 스탠스 시 살짝 눌러 밟기
         self.dt          = 0.02              # 50 Hz
+        self.period      = period            # 게이트 전환 시 Tswing 재계산
         self.gait_type   = gait_type.lower()
 
         # 다리 순서: 0=FL, 1=FR, 2=RL, 3=RR
+        # 'trot' 기본 모드: 직진/측방 = trot, 제자리 회전 시 자동으로 wave 전환
+        # '8phase'/'wave' 모드: 항상 wave (모든 동작에 한 다리씩 swing)
         if self.gait_type in ('8phase', 'wave', '4wave'):
-            # 4-leg wave gait — 한 번에 한 다리만 swing, 항상 3-leg 지지
-            # swing 순서: FL → RR → FR → RL (대각선 교차)
-            # Tswing 은 cycle 의 1/4 (한 다리 swing 비율)
-            self.Tswing = period / 4.0
-            self.dSref  = [0.0, 0.5, 0.75, 0.25]  # FL, FR, RL, RR
-            # Tstance ≈ 3*Tswing (다른 3 다리가 stance 중일 동안 한 다리만 swing)
-            self.tstance_min_ratio = 2.8
-            self.tstance_max_ratio = 3.2
-        else:  # 'trot' 기본
-            self.Tswing = period / 2.0
-            self.dSref  = [0.0, 0.5, 0.5, 0.0]    # 대각선 쌍 동기
-            self.tstance_min_ratio = 0.7
-            self.tstance_max_ratio = 1.3
+            self._active_gait = 'wave'
+        else:
+            self._active_gait = 'trot'
+        self._set_gait(self._active_gait)
 
         self.ref_idx = 0    # FL 기준 다리
 
@@ -60,6 +54,35 @@ class GaitPlanner:
         # 12-point Bezier 계수 (11 = n)
         self._n = 11
         self._binomial = [self._binom(self._n, k) for k in range(12)]
+
+    # ── 게이트 설정 ──────────────────────────────────────────────────────────
+    def _set_gait(self, name):
+        """게이트 파라미터 (Tswing, dSref, Tstance ratio) 한 번에 설정."""
+        if name == 'wave':
+            # 4-leg wave: 한 번에 한 다리만 swing, 3-leg 삼각 지지 (duty ~0.74)
+            self.Tswing = self.period / 4.0
+            self.dSref  = [0.0, 0.5, 0.75, 0.25]   # FL, FR, RL, RR
+            self.tstance_min_ratio = 2.8
+            self.tstance_max_ratio = 3.5
+        else:  # 'trot'
+            # 대각선 쌍 동기 (duty ~0.41 — 비행 구간 있음, 사용자 선택)
+            self.Tswing = self.period / 2.0
+            self.dSref  = [0.0, 0.5, 0.5, 0.0]
+            self.tstance_min_ratio = 0.7
+            self.tstance_max_ratio = 1.3
+        self._active_gait = name
+
+    def _switch_gait_if_needed(self, target):
+        """현재 게이트와 target 이 다르면 전환 + phase reset."""
+        if self._active_gait == target:
+            return
+        self._set_gait(target)
+        # 게이트 전환 시 위상 reset (다른 dSref/Tswing 에서 cycle 새로 시작)
+        self.time = 0.0
+        self.TD_time = 0.0
+        self.time_since_last_TD = 0.0
+        self.SwRef = 0.0
+        self.TD = False
 
     # ── 유틸 ─────────────────────────────────────────────────────────────────
     @staticmethod
@@ -277,6 +300,12 @@ class GaitPlanner:
         # ② 완전 정지 → stand 자세
         if v_mag < 0.005 and abs(omega) < 0.05:
             return self.get_stand_posture(roll, pitch, bh)
+
+        # ②-b 게이트 자동 전환: gait_type='trot' 모드에서 제자리 회전 시 wave 로
+        if self.gait_type == 'trot':
+            pure_rotation_input = (v_mag < 0.005 and abs(omega) > 0.05)
+            target_gait = 'wave' if pure_rotation_input else 'trot'
+            self._switch_gait_if_needed(target_gait)
 
         # ③ cmd_vel → BezierGait 입력 변환
         pure_rotation = (v_mag < 0.005)
