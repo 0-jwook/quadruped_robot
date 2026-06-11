@@ -48,6 +48,8 @@ class GaitNode(Node):
         self.declare_parameter('duty_wave',   0.75)   # wave stance 비율 (3-leg 지지)
         self.declare_parameter('hip_x',       0.1225) # 몸통중심~발 종방향 = BODY_L/2 (URDF 실측)
         self.declare_parameter('hip_y',       0.10)   # 몸통중심~발 횡방향 = BODY_W/2 + L1 (URDF 실측)
+        self.declare_parameter('level_gain',  1.0)    # 수평 유지 강도 (0=끔, 1=완전 수평)
+        self.declare_parameter('level_max',   0.09)   # 수평 유지 발 z 보정 상한 (m, 워크스페이스 보호)
         self.declare_parameter('height_min',  0.11)
         self.declare_parameter('height_max',  0.21)
         self.declare_parameter('gait_type',   'trot')
@@ -73,6 +75,8 @@ class GaitNode(Node):
         dt_wave = self.get_parameter('duty_wave').value
         hip_x = self.get_parameter('hip_x').value
         hip_y = self.get_parameter('hip_y').value
+        lvl_gain = self.get_parameter('level_gain').value
+        lvl_max  = self.get_parameter('level_max').value
         self._cmd_vel_hold_time = self.get_parameter('cmd_vel_hold_time').value
         self._pitch_offset = self.get_parameter('pitch_offset').value
         self._roll_offset  = self.get_parameter('roll_offset').value
@@ -82,7 +86,8 @@ class GaitNode(Node):
                                    body_height=bh, step_height=sh,
                                    max_stride=ms, period=p, gait_type=gt,
                                    duty_trot=dt_trot, duty_wave=dt_wave,
-                                   hip_x=hip_x, hip_y=hip_y)
+                                   hip_x=hip_x, hip_y=hip_y,
+                                   level_gain=lvl_gain, level_max=lvl_max)
         self.get_logger().info(
             f'Gait: {gt}, period={p}s, duty_trot={dt_trot}, '
             f'max_speed≈{self.planner.max_speed():.3f} m/s')

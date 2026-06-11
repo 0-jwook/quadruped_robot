@@ -48,6 +48,8 @@ def generate_launch_description():
             'duty_wave':   0.75,    # wave stance 비율 (3-leg 지지)
             'hip_x':       0.1225,  # 몸통중심~발 종방향 = BODY_L/2 (URDF 실측)
             'hip_y':       0.10,    # 몸통중심~발 횡방향 = BODY_W/2 + L1 = 0.07+0.03 (URDF 실측)
+            'level_gain':  1.0,     # 수평 유지 강도 (0=끔, 1=완전 수평 유지 — 최대 30° 경사)
+            'level_max':   0.09,    # 수평 유지 발 z 보정 상한 (m)
             'height_min':  0.07,    # 앉기 자세 가능 높이
             'height_max':  0.21,
             'gait_type':   'trot',  # 직진/회전=trot, 측방(게다리)=wave 자동 전환

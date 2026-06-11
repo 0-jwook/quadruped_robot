@@ -28,7 +28,8 @@ class GaitPlanner:
                  body_height=0.17, step_height=0.04,
                  max_stride=0.05, period=0.5, gait_type='trot',
                  duty_trot=0.6, duty_wave=0.75,
-                 hip_x=0.10, hip_y=0.05, penetration=0.004):
+                 hip_x=0.10, hip_y=0.05, penetration=0.004,
+                 level_gain=1.0, level_max=0.09):
         self.kin         = kinematics
         self.body_height = body_height
         self.clearance   = step_height       # swing 최대 발 들기 높이
@@ -40,6 +41,9 @@ class GaitPlanner:
         self.duty_wave   = duty_wave
         self.hip_x       = hip_x             # 몸통 중심~발 종방향 거리 (전/후)
         self.hip_y       = hip_y             # 몸통 중심~발 횡방향 거리 (좌/우)
+        # 자세 수평 유지 (geometric leveling): 0=끔, 1=완전 수평 유지
+        self.level_gain  = level_gain
+        self.level_max   = level_max         # leveling dz 절대값 상한 (워크스페이스 보호)
         self.gait_type   = gait_type.lower()
 
         # 활성 게이트 초기화
@@ -122,6 +126,26 @@ class GaitPlanner:
         rx = self.hip_x if idx in (0, 1) else -self.hip_x   # FL,FR 앞(+) / RL,RR 뒤(-)
         ry = self.hip_y if idx in (0, 2) else -self.hip_y   # FL,RL 좌(+) / FR,RR 우(-)
         return rx, ry
+
+    def _level_dz(self, idx, roll, pitch):
+        """
+        기하학적 수평 유지 (geometric body leveling).
+
+        몸통이 (roll, pitch) 만큼 기운 것을 IMU 가 측정했을 때, 각 발의 z 를
+        조정해 발 접지면을 world-수평으로 만들어 몸통을 수평 유지.
+          Δz = -rx·tan(pitch) + ry·tan(roll)     (REP-103: x전방, y좌, z상)
+        부호 근거 (REP-103, pitch>0=nose-down, roll>0=우측down):
+          · pitch>0 (앞 내려감) → 앞다리 더 펴서(z↓) 앞 올림 → -rx·tan>0... rx>0 이면 음수 → 더 폄 ✓
+          · roll>0  (우측 내려감) → 우측다리 더 펴서 우측 올림 → ry<0(우) 이면 음수 → 더 폄 ✓
+        실기에서 leveling 이 거꾸로 작동하면(기울임 가중) level_gain 부호를 뒤집을 것.
+
+        return: 발 z 에 더할 보정량 (m), level_max 로 clamp.
+        """
+        if self.level_gain == 0.0:
+            return 0.0
+        rx, ry = self._foot_center_xy(idx)
+        dz = (-rx * math.tan(pitch) + ry * math.tan(roll)) * self.level_gain
+        return max(-self.level_max, min(self.level_max, dz))
 
     def _foot_stride(self, idx, vx, vy, omega):
         """
@@ -251,16 +275,14 @@ class GaitPlanner:
         return self.max_stride / self.Tstance if self.Tstance > 0 else 0.0
 
     def get_stand_posture(self, roll=0.0, pitch=0.0, body_height=None):
-        """정지 자세: 모든 발 중립 + roll/pitch feedforward 보정."""
+        """정지 자세: 모든 발 중립 + 기하학적 수평 유지 (최대 30° 경사)."""
         bh = body_height if body_height is not None else self.body_height
         self.reset()
 
-        kp_r, kp_p = 0.8, 1.5
-        refs = [(0.2, 0.1), (0.2, -0.1), (-0.2, 0.1), (-0.2, -0.1)]
         neutrals = self._neutral_feet(bh)
         angles = []
-        for i, (lx, ly) in enumerate(refs):
-            dz = -(lx * math.sin(pitch) * kp_p - ly * math.sin(roll) * kp_r)
+        for i in range(4):
+            dz = self._level_dz(i, roll, pitch)
             px, py, pz = neutrals[i]
             res = self.kin.ik(px, py, pz + dz, leg_id=i)
             if res is None:
@@ -316,11 +338,9 @@ class GaitPlanner:
         com_x, com_y = self._update_com(swing_flags)
 
         neutrals = self._neutral_feet(bh)
-        kp_r, kp_p = 0.5, 1.0
-        refs = [(0.2, 0.1), (0.2, -0.1), (-0.2, 0.1), (-0.2, -0.1)]
 
         angles = []
-        for i, (lx, ly) in enumerate(refs):
+        for i in range(4):
             s, is_swing = phases[i]
             sx, sy = strides[i]
 
@@ -329,8 +349,8 @@ class GaitPlanner:
             else:
                 ox, oy, oz = self._stance_traj(s, sx, sy, self.penetration)
 
-            # roll/pitch feedforward (IMU 또는 고정 offset)
-            dz = -(lx * math.sin(pitch) * kp_p - ly * math.sin(roll) * kp_r)
+            # 보행 중에도 기하학적 수평 유지 (경사면 보행 적응)
+            dz = self._level_dz(i, roll, pitch)
 
             nx, ny, nz = neutrals[i]
             px = nx + ox - com_x
