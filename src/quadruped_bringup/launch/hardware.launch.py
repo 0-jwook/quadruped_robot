@@ -46,8 +46,8 @@ def generate_launch_description():
             'period':      0.5,     # 전체 cycle Tstride. max_speed = max_stride/(duty·period)
             'duty_trot':   0.6,     # trot stance 비율 (0.6 → 비행 구간 없음 + 속도 ↑)
             'duty_wave':   0.75,    # wave stance 비율 (3-leg 지지)
-            'hip_x':       0.10,    # 몸통중심~발 종방향 (회전 운동학 — 실제 치수로 교체 권장)
-            'hip_y':       0.05,    # 몸통중심~발 횡방향
+            'hip_x':       0.1225,  # 몸통중심~발 종방향 = BODY_L/2 (URDF 실측)
+            'hip_y':       0.10,    # 몸통중심~발 횡방향 = BODY_W/2 + L1 = 0.07+0.03 (URDF 실측)
             'height_min':  0.07,    # 앉기 자세 가능 높이
             'height_max':  0.21,
             'gait_type':   'trot',  # 직진/회전=trot, 측방(게다리)=wave 자동 전환

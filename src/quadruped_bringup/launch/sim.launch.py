@@ -83,8 +83,8 @@ def generate_launch_description():
             'period':      0.5,     # 전체 cycle Tstride
             'duty_trot':   0.6,     # trot stance 비율
             'duty_wave':   0.75,    # wave stance 비율
-            'hip_x':       0.10,    # 몸통중심~발 종방향
-            'hip_y':       0.05,    # 몸통중심~발 횡방향
+            'hip_x':       0.1225,  # 몸통중심~발 종방향 = BODY_L/2 (URDF 실측)
+            'hip_y':       0.10,    # 몸통중심~발 횡방향 = BODY_W/2 + L1 (URDF 실측)
             'height_min':  0.07,
             'height_max':  0.21,
             'gait_type':   'trot',  # 직진/회전=trot, 측방=wave 자동 전환
