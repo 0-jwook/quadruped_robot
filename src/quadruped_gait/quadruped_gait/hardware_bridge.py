@@ -6,6 +6,7 @@ import time
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Imu
+from std_msgs.msg import Empty
 from trajectory_msgs.msg import JointTrajectory
 
 try:
@@ -92,6 +93,10 @@ class HardwareBridge(Node):
             self._traj_callback,
             10,
         )
+        # IMU 영점 재캘리브 명령 — 로봇 평지 수평에서 발행하면 MCU 가 현재 자세를 영점으로
+        self.imu_zero_sub = self.create_subscription(
+            Empty, '/imu_zero', self._imu_zero_callback, 10,
+        )
         self.imu_pub = self.create_publisher(Imu, '/imu', 10)
 
         self._stop_event = threading.Event()
@@ -169,6 +174,21 @@ class HardwareBridge(Node):
                 f'RL({rl[0]:.0f},{rl[1]:.0f},{rl[2]:.0f}) '
                 f'RR({rr[0]:.0f},{rr[1]:.0f},{rr[2]:.0f})'
             )
+
+    # ------------------------------------------------------------------
+    def _imu_zero_callback(self, msg):
+        """IMU 영점 재캘리브 명령 → MCU 에 ID 0x04 패킷 (payload 없음) 전송."""
+        meta = bytes([0x04, 0])              # ID=0x04, LEN=0
+        packet = b'\xaa\x55' + meta + bytes([_crc8(meta)])
+        with self._ser_lock:
+            if not self.ser:
+                self.get_logger().warn('IMU 영점 명령 실패: 시리얼 미연결')
+                return
+            try:
+                self.ser.write(packet)
+                self.get_logger().info('IMU 영점 재캘리브 명령 전송 (로봇 평지 수평 확인!)')
+            except Exception as e:
+                self.get_logger().error(f'IMU 영점 명령 쓰기 오류: {e}')
 
     # ------------------------------------------------------------------
     def _serial_read_loop(self):
