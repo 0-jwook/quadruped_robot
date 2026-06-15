@@ -41,7 +41,7 @@ def generate_launch_description():
             'L3': 0.135,
             'body_height': 0.14,
             # SpotMicroAI BezierGait 파라미터 (통합 회전 운동학 + 고정 duty)
-            'step_height': 0.035,   # swing 최대 발 들기 높이
+            'step_height': 0.05,    # swing 최대 발 들기 높이 (0.035→0.05, 발 확실히 들기)
             'max_stride':  0.05,    # 발 stride 벡터 크기 상한 (속도 상한 결정)
             'period':      0.8,     # 전체 cycle Tstride (0.6→0.8, cadence 차분 → 속도 ↓·안정 ↑). max_speed = max_stride/(duty·period)
             'duty_trot':   0.6,     # trot stance 비율 (0.6 → 비행 구간 없음 + 속도 ↑)

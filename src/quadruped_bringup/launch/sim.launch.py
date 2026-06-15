@@ -78,7 +78,7 @@ def generate_launch_description():
             'L2': 0.115,
             'L3': 0.135,
             'body_height': 0.14,
-            'step_height': 0.035,   # swing 최대 발 들기 높이
+            'step_height': 0.05,    # swing 최대 발 들기 높이 (0.035→0.05)
             'max_stride':  0.05,    # 발 stride 벡터 크기 상한
             'period':      0.5,     # 전체 cycle Tstride
             'duty_trot':   0.6,     # trot stance 비율
