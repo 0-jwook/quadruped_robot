@@ -53,14 +53,8 @@ class GaitPlanner:
             self._set_gait('trot')
         self._pending_gait = None
 
-        self.ref_idx = 0
-
-        # 위상 추적 상태
+        # 위상 추적 상태 (순수 modular time)
         self.time = 0.0
-        self.TD_time = 0.0
-        self.time_since_last_TD = 0.0
-        self.SwRef = 0.0
-        self.TD = False
 
         # CoM shift 상태 (LPF)
         self.com_x = 0.0
@@ -96,17 +90,15 @@ class GaitPlanner:
             self._pending_gait = target
 
     def _apply_pending_gait_if_safe(self):
-        """cycle 경계(모든 발이 stance 에 가까운 순간)에서만 게이트 전환."""
+        """cycle 경계(기준 다리가 막 stance 시작하는 순간)에서만 게이트 전환."""
         if self._pending_gait is None:
             return
-        if self.time_since_last_TD < self.dt:   # 막 touchdown 으로 wrap 된 순간
+        Tstride = self.Tstance + self.Tswing
+        pos = (self.time / Tstride) % 1.0 if Tstride > 0 else 0.0
+        if pos < (self.dt / Tstride):           # cycle 막 wrap 된 순간
             self._set_gait(self._pending_gait)
             self._pending_gait = None
             self.time = 0.0
-            self.TD_time = 0.0
-            self.time_since_last_TD = 0.0
-            self.SwRef = 0.0
-            self.TD = False
 
     # ── 유틸 ─────────────────────────────────────────────────────────────────
     @staticmethod
@@ -168,61 +160,24 @@ class GaitPlanner:
             (0.0, -L1, -bh),   # RR
         ]
 
-    # ── 위상 관리 ────────────────────────────────────────────────────────────
-    def _check_touchdown(self):
-        if self.SwRef >= 0.9 and self.TD:
-            self.TD_time = self.time
-            self.TD = False
-            self.SwRef = 0.0
-
+    # ── 위상 관리 (순수 modular time — 모든 다리 완전 대칭) ───────────────────
+    # 접촉센서가 없어 open-loop 이므로, 기준 다리에 앵커하지 않고 시간만으로 위상 결정.
+    # 단일 기준 다리 touchdown 리셋은 두 trot 대각쌍을 비대칭으로 만들어 휨을 유발했음.
     def _increment(self):
-        Tstride = self.Tstance + self.Tswing
-        self._check_touchdown()
-        self.time_since_last_TD = self.time - self.TD_time
-        if self.time_since_last_TD > Tstride:
-            self.time_since_last_TD = Tstride
-        elif self.time_since_last_TD < 0.0:
-            self.time_since_last_TD = 0.0
         self.time += self.dt
-        if Tstride < self.Tswing + self.dt:
-            self.time = 0.0
-            self.time_since_last_TD = 0.0
-            self.TD_time = 0.0
-            self.SwRef = 0.0
 
     def _get_phase(self, idx):
-        """해당 다리의 phase[0~1] 와 is_swing 반환."""
-        Tstance = self.Tstance
-        Tstride = Tstance + self.Tswing
-        if idx == self.ref_idx:
-            self.dSref[idx] = 0.0
-        ti = self.time_since_last_TD - self.dSref[idx] * Tstride
-
-        if ti < -self.Tswing:
-            ti += Tstride
-
-        if 0.0 <= ti <= Tstance:
-            phase = ti / Tstance if Tstance > 0.0 else 0.0
-            return phase, False
-
-        sw_phase = 0.0
-        is_swing = False
-        if -self.Tswing <= ti < 0.0:
-            sw_phase = (ti + self.Tswing) / self.Tswing
-            is_swing = True
-        elif Tstance < ti <= Tstride:
-            sw_phase = (ti - Tstance) / self.Tswing
-            is_swing = True
-
-        if sw_phase >= 1.0:
-            sw_phase = 1.0
-
-        if idx == self.ref_idx:
-            self.SwRef = sw_phase
-            if self.SwRef >= 0.999:
-                self.TD = True
-
-        return sw_phase, is_swing
+        """해당 다리의 phase[0~1] 와 is_swing 반환 (modular 시간 기반)."""
+        Tstride = self.Tstance + self.Tswing
+        if Tstride <= 0.0:
+            return 0.0, False
+        duty = self.Tstance / Tstride
+        # 다리별 정규화 위상 위치 [0,1): dSref 만큼 offset
+        pos = (self.time / Tstride - self.dSref[idx]) % 1.0
+        if pos < duty:
+            return (pos / duty) if duty > 0.0 else 0.0, False          # stance
+        else:
+            return (pos - duty) / (1.0 - duty), True                   # swing
 
     # ── 궤적 (벡터 stride 기반) ────────────────────────────────────────────────
     def _swing_traj(self, s, sx, sy, clearance):
@@ -263,10 +218,6 @@ class GaitPlanner:
     # ── 공개 API ────────────────────────────────────────────────────────────
     def reset(self):
         self.time = 0.0
-        self.TD_time = 0.0
-        self.time_since_last_TD = 0.0
-        self.SwRef = 0.0
-        self.TD = False
         self.com_x = 0.0
         self.com_y = 0.0
 
@@ -328,8 +279,6 @@ class GaitPlanner:
             strides = [(sx * sc, sy * sc) for sx, sy in strides]
 
         # ④ 위상 증가
-        if self.Tstance > self.dt:
-            self.TD = True
         self._increment()
 
         # ⑤ 각 다리 phase 계산 → CoM shift → 궤적 → IK
