@@ -202,6 +202,9 @@ class GaitNode(Node):
             if r >= 1.0:
                 self._ramp_done = True
                 self.current_body_height = self._stand_bh
+                # ramp 중 버퍼된 명령 무효화 (기립 직후 의도치 않은 보행 방지)
+                self._walk_active = False
+                self.pose_cmd = None
                 self.get_logger().info('기립 ramp 완료 → 정상 동작')
             self._publish(joint_angles, now)
             return
@@ -214,9 +217,12 @@ class GaitNode(Node):
         walking = self._walk_active and (since_last < self._cmd_vel_hold_time)
 
         if gesture_res is not None:
-            joint_angles, gh = gesture_res
-            self.current_body_height = gh        # 제스처가 높이도 제어
-            self.target_body_height = gh
+            joint_angles, gh, height_active = gesture_res
+            self.current_body_height = gh        # 제스처 높이 추종
+            if height_active:
+                # height 키프레임(sit/lie/ready)일 때만 목표 높이 갱신.
+                # pose 제스처는 높이 안 건드림 → 진행 중 /body_height_cmd 보존.
+                self.target_body_height = gh
         elif pose_active:
             pc = self.pose_cmd
             joint_angles = self.body_pose.get_pose_posture(

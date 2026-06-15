@@ -116,7 +116,6 @@ class GesturePlayer:
         self._t = 0.0              # 현재 키프레임 내 경과 시간
         self._from = self._zero_pose()   # 보간 시작 pose
         self._cur = self._zero_pose()     # 현재 pose
-        self._height = None        # 높이 키프레임 목표 (None=pose 모드)
         self._height_from = 0.14
         self._height_cur = 0.14
 
@@ -158,6 +157,7 @@ class GesturePlayer:
         r = min(1.0, self._t / dur) if dur > 1e-6 else 1.0
         ease = 0.5 * (1.0 - math.cos(math.pi * r))
 
+        height_active = False
         if kind == 'pose':
             target = self._zero_pose()
             target.update(params)
@@ -167,8 +167,10 @@ class GesturePlayer:
         elif kind == 'height':
             target_h = params.get('height', body_height)
             self._height_cur = self._height_from + (target_h - self._height_from) * ease
-            # pose 는 현재 유지
-        else:  # 'hold'
+            height_active = True
+            # pose 는 중립(0)으로 수렴 (다른 제스처 중단 시 기울기 잔재 제거)
+            self._cur = {k: self._from[k] * (1.0 - ease) for k in self._from}
+        else:  # 'hold' — 직전 pose/높이 그대로 유지 (_cur, _height_cur 변경 안 함)
             pass
 
         # 키프레임 종료 → 다음으로
@@ -185,4 +187,4 @@ class GesturePlayer:
             dx=self._cur['dx'], dy=self._cur['dy'], dz=self._cur['dz'],
             roll=self._cur['roll'], pitch=self._cur['pitch'], yaw=self._cur['yaw'],
             body_height=self._height_cur)
-        return angles, self._height_cur
+        return angles, self._height_cur, height_active

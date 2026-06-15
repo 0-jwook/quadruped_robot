@@ -172,6 +172,7 @@ class TeleopKey(Node):
                 # 모드 전환
                 if key == '1':
                     self._mode = 'WALK'; self._vx=self._vy=self._omega=0.0
+                    self._pose=[0.0]*6; self._publish_pose()  # 몸통 오프셋 중립 복귀
                     self._publish_cmd()
                 elif key == '2':
                     self._mode = 'POSE'; self._pose=[0.0]*6
