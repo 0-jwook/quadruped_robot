@@ -22,10 +22,10 @@ GESTURES = {
         (0.6, 'hold', {}),
         (0.8, 'pose', dict()),
     ],
-    # 기지개 — 앞 숙이고 뒤 올림 (개 스트레칭) 후 복귀
+    # 기지개 — 앞으로 더 깊이 숙이고 뒤 올림 (개 스트레칭) 후 복귀
     'stretch': [
-        (1.0, 'pose', dict(pitch=D(20), dx=-0.02)),
-        (0.8, 'hold', {}),
+        (1.2, 'pose', dict(pitch=D(28), dx=-0.03)),
+        (1.0, 'hold', {}),
         (1.0, 'pose', dict()),
     ],
     # 끄덕이기 — 앞뒤로 2회
@@ -62,29 +62,22 @@ GESTURES = {
         (0.18, 'pose', dict(yaw=D(-10))),
         (0.3,  'pose', dict()),
     ],
-    # 손(앞발) 흔들기 — 몸통 뒤로 무게 싣고 앞 들기 흉내 (body pose 한계 내)
-    'wave': [
-        (0.7, 'pose', dict(dx=-0.025, pitch=D(-12))),  # 무게 뒤로 + 앞 들림
-        (0.4, 'pose', dict(dx=-0.025, pitch=D(-12), roll=D(8))),
-        (0.4, 'pose', dict(dx=-0.025, pitch=D(-12), roll=D(-8))),
-        (0.4, 'pose', dict(dx=-0.025, pitch=D(-12), roll=D(8))),
-        (0.7, 'pose', dict()),
-    ],
-    # 까치발 — 몸통 최대로 올림
+    # 까치발 — 몸통 최대로 올림 (더 높게)
     'tall': [
-        (1.0, 'pose', dict(dz=0.035)),
+        (1.2, 'pose', dict(dz=0.05)),
         (1.0, 'hold', {}),
         (1.0, 'pose', dict()),
     ],
-    # 앉기 — 높이 낮춤
+    # 앉기 — 뒤로 앉은 느낌 (높이 중간 + 뒤쪽으로 무게)
     'sit': [
-        (1.2, 'height', dict(height=0.085)),
-        (1.0, 'hold', {}),
+        (1.2, 'height', dict(height=0.10)),
+        (0.6, 'pose', dict(pitch=D(-10))),   # 앞 살짝 들고 (앉은 자세)
+        (1.2, 'hold', {}),
     ],
-    # 엎드리기 — 더 낮춤
+    # 엎드리기 — 바닥에 납작 (훨씬 낮게, 수평) — sit(0.10,앞들림)과 명확히 구분
     'lie': [
-        (1.5, 'height', dict(height=0.075)),
-        (1.0, 'hold', {}),
+        (1.8, 'height', dict(height=0.07)),
+        (1.2, 'hold', {}),
     ],
     # 준비자세 — 기본 stand 복귀
     'ready': [

@@ -19,7 +19,8 @@ class BodyPoseController:
     """
 
     def __init__(self, kinematics, hip_x=0.1225, hip_y=0.10, body_height=0.14,
-                 max_xy=0.03, max_z=0.04, max_ang=0.26):
+                 max_xy=0.03, max_z=0.04, max_ang=0.26,
+                 level_gain=1.0, level_max=0.09):
         self.kin = kinematics
         self.hip_x = hip_x          # 몸통중심~발 종방향
         self.hip_y = hip_y          # 몸통중심~발 횡방향 (= body_width/2 + L1)
@@ -28,6 +29,9 @@ class BodyPoseController:
         self.max_xy  = max_xy       # 이동 상한 (m)
         self.max_z   = max_z        # 상하 상한 (m)
         self.max_ang = max_ang      # 회전 상한 (rad, ~15°)
+        # leveling (planner 와 동일 — POSE 중립을 stand 와 일치시킴)
+        self.level_gain = level_gain
+        self.level_max  = level_max
         # IK 실패 fallback
         self._last_angles = [(0.0, -0.54, 1.35) for _ in range(4)]
 
@@ -37,15 +41,26 @@ class BodyPoseController:
         fy = self.hip_y if idx in (0, 2) else -self.hip_y   # 좌(+)/우(-)
         return (fx, fy, -bh)
 
+    def _level_dz(self, idx, lvl_roll, lvl_pitch):
+        """planner 와 동일한 기하학적 수평유지 z 보정 (POSE 중립 ↔ stand 일치)."""
+        if self.level_gain == 0.0:
+            return 0.0
+        rx = self.hip_x if idx in (0, 1) else -self.hip_x
+        ry = self.hip_y if idx in (0, 2) else -self.hip_y
+        dz = (-rx * math.tan(lvl_pitch) + ry * math.tan(lvl_roll)) * self.level_gain
+        return max(-self.level_max, min(self.level_max, dz))
+
     @staticmethod
     def _clamp(v, lo, hi):
         return max(lo, min(hi, v))
 
     def get_pose_posture(self, dx=0.0, dy=0.0, dz=0.0,
-                         roll=0.0, pitch=0.0, yaw=0.0, body_height=None):
+                         roll=0.0, pitch=0.0, yaw=0.0, body_height=None,
+                         lvl_roll=0.0, lvl_pitch=0.0):
         """
         몸통 6축 변환에 대한 12 관절각 반환 (발 고정).
         dx,dy,dz: 몸통 이동 (m), roll,pitch,yaw: 몸통 회전 (rad)
+        lvl_roll,lvl_pitch: 수평유지용 IMU+offset (stand 와 중립 일치시킴, z 보정)
         """
         bh = body_height if body_height is not None else self.body_height
 
@@ -96,7 +111,7 @@ class BodyPoseController:
             syh = (self.hip_y - L1) if i in (0, 2) else -(self.hip_y - L1)
             px = bx - sxh
             py = by - syh
-            pz = bz
+            pz = bz + self._level_dz(i, lvl_roll, lvl_pitch)   # 수평유지 (stand 와 일치)
 
             res = self.kin.ik(px, py, pz, leg_id=i)
             if res is None:

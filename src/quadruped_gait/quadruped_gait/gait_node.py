@@ -95,7 +95,8 @@ class GaitNode(Node):
                                    hip_x=hip_x, hip_y=hip_y,
                                    level_gain=lvl_gain, level_max=lvl_max)
         self.body_pose = BodyPoseController(self.kin, hip_x=hip_x, hip_y=hip_y,
-                                            body_height=bh)
+                                            body_height=bh,
+                                            level_gain=lvl_gain, level_max=lvl_max)
         self.gesture = GesturePlayer(self.body_pose, dt=0.02)
 
         self.get_logger().info(
@@ -225,10 +226,12 @@ class GaitNode(Node):
                 self.target_body_height = gh
         elif pose_active:
             pc = self.pose_cmd
+            # leveling(roll_eff/pitch_eff)을 z보정으로 적용 → POSE 중립이 WALK stand 와 일치
             joint_angles = self.body_pose.get_pose_posture(
                 dx=pc['dx'], dy=pc['dy'], dz=pc['dz'],
                 roll=pc['roll'], pitch=pc['pitch'], yaw=pc['yaw'],
-                body_height=self.current_body_height)
+                body_height=self.current_body_height,
+                lvl_roll=roll_eff, lvl_pitch=pitch_eff)
         elif walking:
             joint_angles = self.planner.get_walk_posture(
                 self.cmd_vx, self.cmd_vy, self.cmd_omega, elapsed,

@@ -45,27 +45,26 @@ from geometry_msgs.msg import Twist
 from std_msgs.msg import Float32, String
 
 
-# WALK: 키 → (vx, vy, omega) 부호
+# WALK: 키 → 어떤 컴포넌트를 설정할지 (component, sign).
+# 컴포넌트별로 따로 설정 → 전진 유지하며 회전 추가 = 호 이동 가능.
 WALK_BINDINGS = {
-    'w': ( 1,  0,  0), 's': (-1,  0,  0),
-    'a': ( 0,  0,  1), 'd': ( 0,  0, -1),
-    'q': ( 0,  1,  0), 'e': ( 0, -1,  0),
+    'w': ('vx',  1), 's': ('vx', -1),     # 전진/후진
+    'a': ('omega',  1), 'd': ('omega', -1),  # 좌/우 회전 (전진 중이면 호)
+    'q': ('vy',  1), 'e': ('vy', -1),     # 좌/우 횡이동
 }
 
-# POSE: 키 → (dx, dy, dz, roll, pitch, yaw) 부호
+# POSE: 키 → (dx, dy, dz, roll, pitch, yaw) 부호. 회전 3축 중심 (명확·안정).
+# 평행이동(dx/dy)은 우리 로봇(어깨오프셋 작음)에 부적합해 제거.
 POSE_BINDINGS = {
-    'w': ( 1, 0, 0, 0, 0, 0), 's': (-1, 0, 0, 0, 0, 0),   # 앞/뒤
-    'a': ( 0, 1, 0, 0, 0, 0), 'd': ( 0,-1, 0, 0, 0, 0),   # 좌/우
-    'r': ( 0, 0, 1, 0, 0, 0), 'f': ( 0, 0,-1, 0, 0, 0),   # 올림/내림
-    'z': ( 0, 0, 0, 1, 0, 0), 'c': ( 0, 0, 0,-1, 0, 0),   # roll
-    't': ( 0, 0, 0, 0, 1, 0), 'g': ( 0, 0, 0, 0,-1, 0),   # pitch
-    'q': ( 0, 0, 0, 0, 0, 1), 'e': ( 0, 0, 0, 0, 0,-1),   # yaw
+    'w': ( 0, 0, 0, 0, 1, 0), 's': ( 0, 0, 0, 0,-1, 0),   # pitch 앞/뒤 끄덕
+    'a': ( 0, 0, 0, 0, 0, 1), 'd': ( 0, 0, 0, 0, 0,-1),   # yaw 좌/우 회전
+    'z': ( 0, 0, 0, 1, 0, 0), 'c': ( 0, 0, 0,-1, 0, 0),   # roll 좌/우 기울임
 }
 
-# 제스처 단축키
+# 제스처 단축키 (wave 제거)
 GESTURE_KEYS = {
     'h': 'bow', 'j': 'stretch', 'k': 'nod', 'l': 'tilt',
-    'n': 'look', 'm': 'shake', ',': 'wave', '.': 'tall',
+    'n': 'look', 'm': 'shake', '.': 'tall',
     'o': 'sit', 'p': 'lie', 'i': 'ready',
 }
 
@@ -74,10 +73,11 @@ HELP = """
  모드:  1=보행(WALK)   2=바디포즈(POSE)
 
  [WALK]  w/s 전후  a/d 회전  q/e 횡이동  Space 정지
- [POSE]  w/s 앞뒤  a/d 좌우  r/f 상하  q/e yaw  z/c roll  t/g pitch  Space 중립
+         (전진 중 a/d → 호 이동, 컴포넌트 누적)
+ [POSE]  w/s pitch끄덕  a/d yaw회전  z/c roll기울임  Space 중립
  [높이]  [ 낮추기   ] 올리기
  [제스처] h인사 j기지개 k끄덕 l갸웃 n둘러보기 m몸털기
-          ,손흔들기 .까치발 o앉기 p엎드리기 i준비
+          .까치발 o앉기 p엎드리기 i준비
  Ctrl+C 종료
 ====================================================
 """
@@ -192,8 +192,11 @@ class TeleopKey(Node):
                 # 모드별 조작
                 elif self._mode == 'WALK':
                     if key in WALK_BINDINGS:
-                        lx, ly, az = WALK_BINDINGS[key]
-                        self._vx, self._vy, self._omega = lx*self._lin, ly*self._lin, az*self._ang
+                        comp, sign = WALK_BINDINGS[key]
+                        # 컴포넌트별 설정 → 전진(vx) 유지하며 회전(omega) 추가 = 호 이동
+                        if comp == 'vx':    self._vx = sign*self._lin
+                        elif comp == 'vy':  self._vy = sign*self._lin
+                        elif comp == 'omega': self._omega = sign*self._ang
                     elif key in (' ', 'x'):
                         self._vx=self._vy=self._omega=0.0
                     self._publish_cmd()
