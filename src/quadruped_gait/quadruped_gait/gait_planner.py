@@ -265,9 +265,15 @@ class GaitPlanner:
         if v_mag < 0.005 and abs(omega) < 0.05:
             return self.get_stand_posture(roll, pitch, bh)
 
-        # ②-b 게이트 전환 요청 (Fix 4): 측방 우세 시 wave, 그 외 trot. cycle 경계에서만 적용
+        # ②-b 게이트 전환 요청 (Fix 4): cycle 경계에서만 적용.
+        #   wave 로 전환하는 두 경우 (둘 다 trot 이 본질적으로 약한 동작):
+        #     · 측방 우세 (|vy| > |vx|): 게다리 → 3발 지지 wave 가 안정
+        #     · 제자리 회전 (병진 거의 0, omega 큼): trot 2발로는 헛돎 → wave 3발 지지
+        #   그 외(전진/후진/호회전)는 빠른 trot 유지.
         if self.gait_type == 'trot':
-            target = 'wave' if (abs(vy) > abs(vx) and v_mag > 0.01) else 'trot'
+            strafe   = (abs(vy) > abs(vx) and v_mag > 0.01)
+            pure_rot = (v_mag < 0.02 and abs(omega) > 0.1)
+            target = 'wave' if (strafe or pure_rot) else 'trot'
             self._request_gait(target)
         self._apply_pending_gait_if_safe()
 
