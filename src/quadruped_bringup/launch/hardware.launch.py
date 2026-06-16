@@ -56,7 +56,7 @@ def generate_launch_description():
             'cmd_vel_hold_time': 30.0,
             'pitch_offset': 0.015,  # rad. + = 앞 들기 (로봇 앞 기울임 보정)
             'roll_offset':  0.015,  # rad. + = 우측 들기 (로봇 우측 기울임 보정)
-            'yaw_trim':     0.07,   # rad/s. 직진 휨 보정. 우측 휨 → 양수(좌향). period 0.9 기준 튜닝
+            'yaw_trim':     0.09,   # rad/s. 직진 휨 보정. 우측 휨 → 양수(좌향). period 0.9 기준 튜닝
             # 넘어짐 감지 + 자동 기립 (IMU roll/pitch 필요 — IMU 미수신이면 무동작)
             'fall_detect':  True,   # 넘어짐 감지 on/off
             'fall_tilt_thresh': 1.0,  # rad. 이 이상 기울면 넘어짐 (~57°)
