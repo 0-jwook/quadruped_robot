@@ -43,12 +43,12 @@ def generate_launch_description():
             # SpotMicroAI BezierGait 파라미터 (통합 회전 운동학 + 고정 duty)
             'step_height': 0.035,   # swing 최대 발 들기 높이 (0.05→0.035, 다시 낮춤)
             'max_stride':  0.05,    # 발 stride 벡터 크기 상한 (속도 상한 결정)
-            'period':      1.0,     # 전체 cycle Tstride (0.9→1.0, 더 느리게). max_speed = max_stride/(duty·period)
+            'period':      0.9,     # 전체 cycle Tstride (1.0→0.9, 속도 조금 ↑). max_speed = max_stride/(duty·period)
             'duty_trot':   0.6,     # trot stance 비율 (0.6 → 비행 구간 없음 + 속도 ↑)
             'duty_wave':   0.75,    # wave stance 비율 (3-leg 지지)
             'hip_x':       0.1225,  # 몸통중심~발 종방향 = BODY_L/2 (URDF 실측)
             'hip_y':       0.10,    # 몸통중심~발 횡방향 = BODY_W/2 + L1 = 0.07+0.03 (URDF 실측)
-            'level_gain':  1.0,     # 수평 유지 강도 (0=끔, 1=완전 수평 유지 — 최대 30° 경사)
+            'level_gain':  0.0,     # 수평 유지 강도 (0=끔, 1=완전 수평 유지 — 최대 30° 경사) — 잠시 OFF
             'level_max':   0.09,    # 수평 유지 발 z 보정 상한 (m)
             'height_min':  0.07,    # 앉기 자세 가능 높이
             'height_max':  0.21,
@@ -56,7 +56,7 @@ def generate_launch_description():
             'cmd_vel_hold_time': 30.0,
             'pitch_offset': 0.015,  # rad. + = 앞 들기 (로봇 앞 기울임 보정)
             'roll_offset':  0.015,  # rad. + = 우측 들기 (로봇 우측 기울임 보정)
-            'yaw_trim':     0.08,   # rad/s. 직진 휨 보정. 재캘리브 후 좌 과보정 → 0.15→0.08 하향. 실기 튜닝
+            'yaw_trim':     0.07,   # rad/s. 직진 휨 보정. 우측 휨 → 양수(좌향). period 0.9 기준 튜닝
         }],
     )
 
