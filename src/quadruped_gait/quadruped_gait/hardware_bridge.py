@@ -2,6 +2,7 @@ import math
 import threading
 import struct
 import time
+import os
 
 import rclpy
 from rclpy.node import Node
@@ -19,13 +20,36 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # 서보 트림값 (기계적 조립 오차 보정, 단위: degree)
 # ---------------------------------------------------------------------------
-SERVO_TRIMS = {
+# config/servo_trims.yaml 에서 로드 (calibrate.py 가 기록). 파일 없으면 아래 기본값.
+_DEFAULT_SERVO_TRIMS = {
     #        shoulder  thigh   calf
     'FL': (   1.0,   19.0,  -13.0),
     'FR': (   7.0,  -30.0,    0.0),
     'RL': (   0.0,   22.0,  -15.0),
     'RR': (   6.0,   -5.0,   15.0),
 }
+
+
+def _load_servo_trims():
+    """config/servo_trims.yaml 로드 → {leg: (s,t,c)}. 실패 시 기본값."""
+    try:
+        import yaml
+        from ament_index_python.packages import get_package_share_directory
+        path = os.path.join(get_package_share_directory('quadruped_gait'),
+                            'config', 'servo_trims.yaml')
+        with open(path) as f:
+            data = yaml.safe_load(f) or {}
+        raw = data.get('servo_trims', {})
+        out = {}
+        for leg in ('FL', 'FR', 'RL', 'RR'):
+            v = raw.get(leg)
+            out[leg] = tuple(float(x) for x in v) if (v and len(v) == 3) else _DEFAULT_SERVO_TRIMS[leg]
+        return out
+    except Exception:
+        return dict(_DEFAULT_SERVO_TRIMS)
+
+
+SERVO_TRIMS = _load_servo_trims()
 
 
 def _clamp(val: float, lo: float = 0.0, hi: float = 180.0) -> float:

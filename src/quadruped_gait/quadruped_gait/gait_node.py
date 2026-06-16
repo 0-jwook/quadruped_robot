@@ -65,6 +65,12 @@ class GaitNode(Node):
         self.declare_parameter('roll_offset',  0.0)
         self.declare_parameter('startup_ramp_time', 3.0)  # SIT→STAND ramp 시간
         self.declare_parameter('yaw_trim', 0.0)  # 직진 휨 보정 (rad/s). 좌측 휨이면 음수(우향 보정)
+        # 넘어짐 감지 / 자동 기립 (IMU roll/pitch 필요)
+        self.declare_parameter('fall_detect', True)        # 넘어짐 감지 on/off
+        self.declare_parameter('fall_tilt_thresh', 1.0)    # rad. roll/pitch 이 이상 기울면 넘어짐 (~57°)
+        self.declare_parameter('fall_hold_time', 0.5)      # s. 이 시간 이상 유지돼야 넘어짐 확정
+        self.declare_parameter('auto_recover', True)       # 넘어지면 자동 기립 시도
+        self.declare_parameter('recover_time', 3.0)        # s. 기립 시퀀스 길이
 
         L1 = self.get_parameter('L1').value
         L2 = self.get_parameter('L2').value
@@ -88,6 +94,11 @@ class GaitNode(Node):
         self._roll_offset  = self.get_parameter('roll_offset').value
         self._ramp_time = self.get_parameter('startup_ramp_time').value
         self._yaw_trim = self.get_parameter('yaw_trim').value
+        self._fall_detect = self.get_parameter('fall_detect').value
+        self._fall_tilt_thresh = self.get_parameter('fall_tilt_thresh').value
+        self._fall_hold = self.get_parameter('fall_hold_time').value
+        self._auto_recover = self.get_parameter('auto_recover').value
+        self._recover_time = self.get_parameter('recover_time').value
 
         self.kin     = LegKinematics(L1=L1, L2=L2, L3=L3)
         self.planner = GaitPlanner(self.kin,
@@ -139,6 +150,11 @@ class GaitNode(Node):
         # 시작 ramp: SIT → STAND
         self._ramp_done = (self._ramp_time <= 0.0)
         self._sit_height = 0.085        # SIT 자세 높이 (MCU SIT 와 맞춤)
+        # 넘어짐/자동기립 상태
+        self._fall_acc = 0.0            # 기울임 누적 시간
+        self._recovering = False        # 기립 시퀀스 진행 중
+        self._recover_t0 = 0.0
+        self._recover_low = 0.07        # 기립 중 웅크리는 최저 높이
 
         self.joint_names = [
             'front_left_shoulder_joint', 'front_left_leg_joint', 'front_left_foot_joint',
@@ -211,6 +227,33 @@ class GaitNode(Node):
                 self.get_logger().info('기립 ramp 완료 → 정상 동작')
             self._publish(joint_angles, now)
             return
+
+        # ── 넘어짐 감지 + 자동 기립 (IMU tilt 기반, 최우선) ──
+        if self._fall_detect and not self._recovering:
+            tilt = max(abs(self.roll), abs(self.pitch))
+            self._fall_acc = self._fall_acc + self.dt if tilt > self._fall_tilt_thresh else 0.0
+            if self._fall_acc >= self._fall_hold:
+                self.get_logger().warn(
+                    f'넘어짐 감지 (tilt={math.degrees(tilt):.0f}°)'
+                    + (' → 자동 기립' if self._auto_recover else ''))
+                self._fall_acc = 0.0
+                if self._auto_recover:
+                    self._recovering = True
+                    self._recover_t0 = elapsed
+        if self._recovering:
+            rt = elapsed - self._recover_t0
+            if rt >= self._recover_time:
+                self._recovering = False        # 기립 완료 → 일반 동작 복귀
+            else:
+                frac = rt / self._recover_time
+                if frac < 0.4:                   # ① 웅크리기 (다리 모음)
+                    h = self._stand_bh + (self._recover_low - self._stand_bh) * (frac / 0.4)
+                else:                            # ② 밀어 올려 STAND
+                    h = self._recover_low + (self._stand_bh - self._recover_low) * ((frac - 0.4) / 0.6)
+                self.current_body_height = h
+                self._walk_active = False
+                self._publish(self.planner.get_stand_posture(0.0, 0.0, h), now)
+                return
 
         # ── 모드 우선순위: GESTURE > BODY_POSE > WALK > STAND ──
         gesture_res = self.gesture.step(self.current_body_height) if self.gesture.is_active() else None

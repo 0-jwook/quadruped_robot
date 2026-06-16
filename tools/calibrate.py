@@ -153,12 +153,31 @@ def _load_servo_trims_from_file(path):
 
 
 # HARDWARE_BRIDGE_PATH 는 위에서 _REPO 기준으로 이미 정의됨
-INITIAL_TRIMS = _load_servo_trims_from_file(HARDWARE_BRIDGE_PATH) or {
-    'FL': (0.0, 0.0, 0.0),
-    'FR': (0.0, 0.0, 0.0),
-    'RL': (0.0, 0.0, 0.0),
-    'RR': (0.0, 0.0, 0.0),
-}
+SERVO_TRIMS_YAML = os.path.join(_REPO, 'src/quadruped_gait/config/servo_trims.yaml')
+
+
+def _load_trims_from_yaml(path):
+    """config/servo_trims.yaml → {leg:(s,t,c)}. 실패 시 None."""
+    try:
+        import yaml
+        with open(path) as f:
+            data = yaml.safe_load(f) or {}
+        raw = data.get('servo_trims', {})
+        out = {}
+        for leg in LEG_NAMES:
+            v = raw.get(leg)
+            if v and len(v) == 3:
+                out[leg] = tuple(float(x) for x in v)
+        return out if len(out) == 4 else None
+    except Exception:
+        return None
+
+
+# 우선순위: yaml(설정파일) → (구) hardware_bridge.py 파싱 → 0
+INITIAL_TRIMS = (_load_trims_from_yaml(SERVO_TRIMS_YAML)
+                 or _load_servo_trims_from_file(HARDWARE_BRIDGE_PATH)
+                 or {'FL': (0.0, 0.0, 0.0), 'FR': (0.0, 0.0, 0.0),
+                     'RL': (0.0, 0.0, 0.0), 'RR': (0.0, 0.0, 0.0)})
 
 # 캘리브 시작 자세 = raw 기준 자세 + 현재 SERVO_TRIMS (이미 보정된 자세에서 시작)
 HOME = list(RAW_BASE)
@@ -214,17 +233,29 @@ def print_state(angles, leg_idx, joint_idx):
 
 
 def print_trims(angles):
+    trims = {leg: [round(angles[i * 3 + j] - RAW_BASE[i * 3 + j], 1) for j in range(3)]
+             for i, leg in enumerate(LEG_NAMES)}
     sys.stdout.write("\n\n")
     sys.stdout.write("=" * 60 + "\n")
-    sys.stdout.write("hardware_bridge.py 의 SERVO_TRIMS 에 복사하세요:\n")
-    sys.stdout.write("(누적값 — 기존 trim + 이번 추가 조정)\n")
+    sys.stdout.write("SERVO_TRIMS (누적값 — 기존 trim + 이번 추가 조정):\n")
     sys.stdout.write("=" * 60 + "\n")
     sys.stdout.write("SERVO_TRIMS = {\n")
     sys.stdout.write("    #        shoulder   thigh    calf\n")
-    for i, leg in enumerate(LEG_NAMES):
-        trims = [angles[i * 3 + j] - RAW_BASE[i * 3 + j] for j in range(3)]
-        sys.stdout.write(f"    '{leg}': ({trims[0]:8.1f}, {trims[1]:7.1f}, {trims[2]:7.1f}),\n")
+    for leg in LEG_NAMES:
+        t = trims[leg]
+        sys.stdout.write(f"    '{leg}': ({t[0]:8.1f}, {t[1]:7.1f}, {t[2]:7.1f}),\n")
     sys.stdout.write("}\n")
+    # config/servo_trims.yaml 에 자동 저장 → hardware_bridge 가 다음 기동 시 로드 (수동 복사 불필요)
+    try:
+        import yaml
+        with open(SERVO_TRIMS_YAML, 'w') as f:
+            f.write("# 서보 트림 (degree) — calibrate.py 'p' 키로 자동 기록.\n")
+            f.write("# 형식:  다리: [shoulder, thigh, calf]\n")
+            yaml.safe_dump({'servo_trims': trims}, f, sort_keys=False, default_flow_style=None)
+        sys.stdout.write(f"\n✅ 저장됨 → {SERVO_TRIMS_YAML}\n")
+        sys.stdout.write("   hardware_bridge 재시작 시 자동 적용 (symlink-install).\n")
+    except Exception as e:
+        sys.stdout.write(f"\n⚠️ yaml 저장 실패: {e} — 위 값을 수동 복사하세요.\n")
     sys.stdout.write("=" * 60 + "\n\n")
     sys.stdout.flush()
 

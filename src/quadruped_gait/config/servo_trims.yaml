@@ -1,0 +1,8 @@
+# 서보 트림 (단위: degree) — 기계적 조립 오차 보정
+# hardware_bridge 가 부팅 시 로드. calibrate.py 가 'p' 키로 여기에 자동 기록.
+# 형식:  다리: [shoulder, thigh, calf]
+servo_trims:
+  FL: [1.0, 19.0, -13.0]
+  FR: [7.0, -30.0, 0.0]
+  RL: [0.0, 22.0, -15.0]
+  RR: [6.0, -5.0, 15.0]

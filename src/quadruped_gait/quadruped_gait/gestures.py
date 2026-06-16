@@ -15,6 +15,9 @@ import math
 
 D = math.radians   # degree → rad 헬퍼
 
+# 제스처 전체 동작 길이 배율 (1.0=원본). ↑ 일수록 동작이 느리고 길어짐.
+GESTURE_TIME_SCALE = 1.5
+
 GESTURES = {
     # 인사 — 앞쪽으로 숙였다 복귀
     'bow': [
@@ -145,6 +148,7 @@ class GesturePlayer:
             return None
 
         dur, kind, params = self._frames[self._idx]
+        dur *= GESTURE_TIME_SCALE        # 전역 배율로 동작 길이 늘림
         self._t += self.dt
         # 키프레임 내 진행률 (cosine ease)
         r = min(1.0, self._t / dur) if dur > 1e-6 else 1.0

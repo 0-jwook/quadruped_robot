@@ -9,8 +9,7 @@ teleop_key.py
   (제스처는 모드 무관, 숫자키 외 단축키로 즉시 재생)
 
 [WALK 모드]
-  w/s : 전진 / 후진      a/d : 좌회전 / 우회전
-  q/e : 좌/우 횡이동      Space/x : 정지
+  w/s : 전진 / 후진      Space/x : 정지
 
 [POSE 모드] (발 고정, 몸통 6축)
   w/s : 몸통 앞/뒤        a/d : 몸통 좌/우
@@ -48,9 +47,7 @@ from std_msgs.msg import Float32, String
 # WALK: 키 → 어떤 컴포넌트를 설정할지 (component, sign).
 # 컴포넌트별로 따로 설정 → 전진 유지하며 회전 추가 = 호 이동 가능.
 WALK_BINDINGS = {
-    'w': ('vx',  1), 's': ('vx', -1),     # 전진/후진
-    'a': ('omega',  1), 'd': ('omega', -1),  # 좌/우 회전 (전진 중이면 호)
-    'q': ('vy',  1), 'e': ('vy', -1),     # 좌/우 횡이동
+    'w': ('vx',  1), 's': ('vx', -1),     # 전진/후진만 (회전 a/d·횡이동 q/e 는 실기 미동작으로 제거)
 }
 
 # POSE: 키 → (dx, dy, dz, roll, pitch, yaw) 부호. 회전 3축 중심 (명확·안정).
@@ -72,8 +69,7 @@ HELP = """
 ================= Quadruped Teleop =================
  모드:  1=보행(WALK)   2=바디포즈(POSE)
 
- [WALK]  w/s 전후  a/d 회전  q/e 횡이동  Space 정지
-         (전진 중 a/d → 호 이동, 컴포넌트 누적)
+ [WALK]  w/s 전후  Space 정지
  [POSE]  w/s pitch끄덕  a/d yaw회전  z/c roll기울임  Space 중립
  [높이]  [ 낮추기   ] 올리기
  [제스처] h인사 j기지개 k끄덕 l갸웃 n둘러보기 m몸털기
