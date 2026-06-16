@@ -64,6 +64,7 @@ class GaitNode(Node):
         self.declare_parameter('pitch_offset', 0.0)
         self.declare_parameter('roll_offset',  0.0)
         self.declare_parameter('startup_ramp_time', 3.0)  # SIT→STAND ramp 시간
+        self.declare_parameter('yaw_trim', 0.0)  # 직진 휨 보정 (rad/s). 좌측 휨이면 음수(우향 보정)
 
         L1 = self.get_parameter('L1').value
         L2 = self.get_parameter('L2').value
@@ -86,6 +87,7 @@ class GaitNode(Node):
         self._pitch_offset = self.get_parameter('pitch_offset').value
         self._roll_offset  = self.get_parameter('roll_offset').value
         self._ramp_time = self.get_parameter('startup_ramp_time').value
+        self._yaw_trim = self.get_parameter('yaw_trim').value
 
         self.kin     = LegKinematics(L1=L1, L2=L2, L3=L3)
         self.planner = GaitPlanner(self.kin,
@@ -233,8 +235,12 @@ class GaitNode(Node):
                 body_height=self.current_body_height,
                 lvl_roll=roll_eff, lvl_pitch=pitch_eff)
         elif walking:
+            # 직진 휨 보정: 병진(전후/측방) 명령이 있을 때만 yaw_trim 을 더해 heading drift 상쇄
+            omega_eff = self.cmd_omega
+            if abs(self.cmd_vx) > 0.005 or abs(self.cmd_vy) > 0.005:
+                omega_eff += self._yaw_trim
             joint_angles = self.planner.get_walk_posture(
-                self.cmd_vx, self.cmd_vy, self.cmd_omega, elapsed,
+                self.cmd_vx, self.cmd_vy, omega_eff, elapsed,
                 roll_eff, pitch_eff, self.current_body_height)
         else:
             self._walk_active = False

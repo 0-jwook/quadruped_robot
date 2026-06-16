@@ -38,6 +38,7 @@ import time
 import termios
 import tty
 import select
+import os
 
 try:
     import serial
@@ -59,31 +60,34 @@ RAW_HOME = [
 ]
 
 
-def _load_pitch_offset_from_launch(path):
-    """launch 파일에서 pitch_offset 파라미터 값을 파싱."""
+# 레포 루트 = 이 스크립트(tools/calibrate.py)의 상위 디렉터리 (하드코딩 경로 제거)
+_REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_LAUNCH_PATH = os.path.join(_REPO, 'src/quadruped_bringup/launch/hardware.launch.py')
+HARDWARE_BRIDGE_PATH = os.path.join(_REPO, 'src/quadruped_gait/quadruped_gait/hardware_bridge.py')
+
+
+def _load_param_from_launch(path, name, default):
+    """launch 파일에서 'name': 숫자 파라미터를 파싱."""
     import re
     try:
         text = open(path).read()
     except Exception:
-        return 0.0
-    m = re.search(r"['\"]pitch_offset['\"]\s*:\s*([-\d.]+)", text)
-    return float(m.group(1)) if m else 0.0
+        return default
+    m = re.search(r"['\"]" + name + r"['\"]\s*:\s*([-\d.]+)", text)
+    return float(m.group(1)) if m else default
 
 
-PITCH_OFFSET = _load_pitch_offset_from_launch(
-    '/home/jaewook/Quardruped/src/quadruped_bringup/launch/hardware.launch.py'
-)
+# 실제 보행 파라미터를 launch 에서 읽어 캘리브 자세를 걷기 자세와 일치시킴
+PITCH_OFFSET = _load_param_from_launch(_LAUNCH_PATH, 'pitch_offset', 0.0)
+BODY_HEIGHT  = _load_param_from_launch(_LAUNCH_PATH, 'body_height', 0.14)
 
 
 def _compute_stand_pose(body_height: float = 0.17, pitch_offset: float = 0.0):
     """실제 보행에 사용되는 stand 자세 raw 서보 각도 (SERVO_TRIMS=0 기준)."""
     import math as _m
-    candidates = [
-        '/home/jaewook/Quardruped/install/quadruped_gait/lib/python3.10/site-packages',
-        '/home/jaewook/Quardruped/install/quadruped_gait/lib/python3.8/site-packages',
-        '/home/jaewook/Quardruped/install/quadruped_gait/lib/python3.12/site-packages',
-        '/home/jaewook/Quardruped/src/quadruped_gait',
-    ]
+    import glob as _glob
+    candidates = _glob.glob(os.path.join(_REPO, 'install/quadruped_gait/lib/python*/site-packages'))
+    candidates.append(os.path.join(_REPO, 'src/quadruped_gait'))
     for p in candidates:
         if p not in sys.path:
             sys.path.insert(0, p)
@@ -124,8 +128,8 @@ if POSE_MODE == 'home':
     RAW_BASE = RAW_HOME
     BASE_NAME = 'HOME (다리 쫙 편 자세)'
 else:
-    RAW_BASE = _compute_stand_pose(body_height=0.17, pitch_offset=PITCH_OFFSET)
-    BASE_NAME = f'STAND (보행 자세, pitch_offset={PITCH_OFFSET:.3f} rad 적용)'
+    RAW_BASE = _compute_stand_pose(body_height=BODY_HEIGHT, pitch_offset=PITCH_OFFSET)
+    BASE_NAME = f'STAND (보행 자세, body_height={BODY_HEIGHT:.3f}m, pitch_offset={PITCH_OFFSET:.3f} rad)'
 
 
 def _load_servo_trims_from_file(path):
@@ -148,7 +152,7 @@ def _load_servo_trims_from_file(path):
     return result if result else None
 
 
-HARDWARE_BRIDGE_PATH = '/home/jaewook/Quardruped/src/quadruped_gait/quadruped_gait/hardware_bridge.py'
+# HARDWARE_BRIDGE_PATH 는 위에서 _REPO 기준으로 이미 정의됨
 INITIAL_TRIMS = _load_servo_trims_from_file(HARDWARE_BRIDGE_PATH) or {
     'FL': (0.0, 0.0, 0.0),
     'FR': (0.0, 0.0, 0.0),
