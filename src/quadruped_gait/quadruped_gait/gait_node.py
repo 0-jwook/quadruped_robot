@@ -278,10 +278,12 @@ class GaitNode(Node):
                 body_height=self.current_body_height,
                 lvl_roll=roll_eff, lvl_pitch=pitch_eff)
         elif walking:
-            # 직진 휨 보정: 병진(전후/측방) 명령이 있을 때만 yaw_trim 을 더해 heading drift 상쇄
-            omega_eff = self.cmd_omega
+            # 회전(omega)은 병진(전후/측방) 중에만 적용 → 제자리 회전 금지, 전진+회전 = 호 회전.
+            # 병진 중엔 yaw_trim(직진 휨 보정)도 함께 더함.
             if abs(self.cmd_vx) > 0.005 or abs(self.cmd_vy) > 0.005:
-                omega_eff += self._yaw_trim
+                omega_eff = self.cmd_omega + self._yaw_trim
+            else:
+                omega_eff = 0.0   # 병진 없으면 회전 무시 (제자리 회전 안 됨)
             joint_angles = self.planner.get_walk_posture(
                 self.cmd_vx, self.cmd_vy, omega_eff, elapsed,
                 roll_eff, pitch_eff, self.current_body_height)

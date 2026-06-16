@@ -48,7 +48,7 @@ def generate_launch_description():
             'duty_wave':   0.75,    # wave stance 비율 (3-leg 지지)
             'hip_x':       0.1225,  # 몸통중심~발 종방향 = BODY_L/2 (URDF 실측)
             'hip_y':       0.10,    # 몸통중심~발 횡방향 = BODY_W/2 + L1 = 0.07+0.03 (URDF 실측)
-            'level_gain':  0.0,     # 수평 유지 강도 (0=끔, 1=완전 수평 유지 — 최대 30° 경사) — 잠시 OFF
+            'level_gain':  1.0,     # 수평 유지(중심 잡기) 강도 (0=끔, 1=완전 수평 유지 — 최대 30° 경사) ON
             'level_max':   0.09,    # 수평 유지 발 z 보정 상한 (m)
             'height_min':  0.07,    # 앉기 자세 가능 높이
             'height_max':  0.21,
@@ -60,7 +60,7 @@ def generate_launch_description():
             # 넘어짐 감지 + 자동 기립 (IMU roll/pitch 필요 — IMU 미수신이면 무동작)
             'fall_detect':  True,   # 넘어짐 감지 on/off
             'fall_tilt_thresh': 1.0,  # rad. 이 이상 기울면 넘어짐 (~57°)
-            'auto_recover': True,   # 넘어지면 웅크렸다 밀어올려 자동 기립. 끄려면 False
+            'auto_recover': False,  # 넘어지면 웅크렸다 밀어올려 자동 기립 (OFF). 켜려면 True
             'recover_time': 3.0,    # s. 기립 시퀀스 길이
         }],
     )
